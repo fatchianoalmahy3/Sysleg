@@ -1,0 +1,111 @@
+{
+  "entities": {
+    "Konstituen": {
+      "title": "Konstituen",
+      "description": "Data konstituen pemilih",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nik": { "type": "string" },
+        "name": { "type": "string" },
+        "gender": { "type": "string" },
+        "phone": { "type": "string" },
+        "kecamatan": { "type": "string" },
+        "desa": { "type": "string" },
+        "ktp_image_url": { "type": "string" },
+        "location": { "type": "string" },
+        "notes": { "type": "string" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" },
+        "created_by_role": { "type": "string" }
+      }
+    },
+    "SaksiC1": {
+      "title": "Saksi C1",
+      "description": "Formulir C1 Plano",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tps_name": { "type": "string" },
+        "desa": { "type": "string" },
+        "suara_caleg": { "type": "number" },
+        "suara_partai": { "type": "number" },
+        "suara_tidak_sah": { "type": "number" },
+        "c1_image_url": { "type": "string" },
+        "arithmetic_valid": { "type": "boolean" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" },
+        "created_by_role": { "type": "string" }
+      }
+    },
+    "Relawan": {
+      "title": "Relawan",
+      "description": "Struktur Relawan",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "role_level": { "type": "string" },
+        "target_suara": { "type": "number" },
+        "is_active": { "type": "boolean" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" },
+        "created_by_role": { "type": "string" }
+      }
+    },
+    "AgendaKampanye": {
+      "title": "Agenda Kampanye",
+      "description": "Agenda dan titik kampanye",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "location": { "type": "string" },
+        "estimasi_massa": { "type": "number" },
+        "notes": { "type": "string" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" },
+        "created_by_role": { "type": "string" }
+      }
+    },
+    "LogistikAPK": {
+      "title": "Logistik APK",
+      "description": "Distribusi Logistik",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "item_name": { "type": "string" },
+        "quantity": { "type": "number" },
+        "receiver": { "type": "string" },
+        "proof_image_url": { "type": "string" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" },
+        "created_by_role": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "konstituen/{docId}": {
+      "schema": { "$ref": "#/entities/Konstituen" },
+      "description": "Data pemilih"
+    },
+    "saksi_c1/{docId}": {
+      "schema": { "$ref": "#/entities/SaksiC1" },
+      "description": "Data formulir C1"
+    },
+    "relawan/{docId}": {
+      "schema": { "$ref": "#/entities/Relawan" },
+      "description": "Data relawan"
+    },
+    "agenda_kampanye/{docId}": {
+      "schema": { "$ref": "#/entities/AgendaKampanye" },
+      "description": "Data agenda kampanye"
+    },
+    "logistik_apk/{docId}": {
+      "schema": { "$ref": "#/entities/LogistikAPK" },
+      "description": "Data logistik"
+    }
+  }
+}

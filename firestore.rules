@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    match /konstituen/{docId} {
+      allow read, write: if true; // Open for testing based on user's current setup
+    }
+    
+    match /saksi_c1/{docId} {
+      allow read, write: if true;
+    }
+    
+    match /relawan/{docId} {
+      allow read, write: if true;
+    }
+    
+    match /agenda_kampanye/{docId} {
+      allow read, write: if true;
+    }
+    
+    match /logistik_apk/{docId} {
+      allow read, write: if true;
+    }
+    
+    // Fallback for previous collections
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
