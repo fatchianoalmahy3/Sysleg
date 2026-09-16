@@ -26,6 +26,23 @@ html, body {
   overscroll-behavior-y: contain !important;
 }
 
+/* Fix Leaflet divIcon background */
+.leaflet-div-icon.tactical-radar-dot-custom {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Seamless floating dark tooltip for village polygons */
+.leaflet-tooltip.custom-village-tooltip {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+.leaflet-tooltip.custom-village-tooltip::before {
+  display: none !important;
+}
+
 @media print {
   body {
     background-color: white !important;

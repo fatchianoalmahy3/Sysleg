@@ -88,6 +88,9 @@ app.get('/api/v1/schemas', (req, res) => {
   });
 });
 
+// Serve static assets from public folder
+app.use(express.static(path.join(process.cwd(), 'public')));
+
 // Vite Middleware for Full Stack Dev & Prod Serving
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {

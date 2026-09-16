@@ -70,7 +70,18 @@ When defining fields in `src/core/registry.ts`, use any of the following standar
 
 ---
 
-## 6. Zero-Build Workflow & Compilation Protocol
-- **THE REFRESH-FIRST DIRECTIVE**: In standard development cycles and everyday feature updates, DO NOT execute `compile_applet`, `npm run build`, or heavy build tasks. The Vite dev server running in Node.js handles JIT (Just-In-Time) compilation on-the-fly. Code changes are served immediately upon browser refresh.
+## 6. Bun Runtime & Package Manager Protocol
+- **BUN AS PRIMARY RUNTIME**: Proyek ini menggunakan **Bun** (`bun`) sebagai JavaScript/TypeScript runtime dan package manager utama.
+  - Development dev server dijalankan dengan `bun server.ts`.
+  - Instalasi paket dan script eksekusi mengutamakan Bun (`bun add`, `bun run`).
+  - Lockfile proyek menggunakan `bun.lock`.
+- **PRODUCTION BUILD COMPATIBILITY**:
+  - Script build (`npm run build` / `bun run build`) tetap mengkompilasi ke bundle CommonJS (`dist/server.cjs`) menggunakan esbuild untuk memastikan kompatibilitas 100% dengan runner container Cloud Run di produksi.
+
+---
+
+## 7. Zero-Build Workflow & Compilation Protocol
+- **THE REFRESH-FIRST DIRECTIVE**: In standard development cycles and everyday feature updates, DO NOT execute `compile_applet`, `npm run build`, or heavy build tasks. The Vite dev server running in Bun handles JIT (Just-In-Time) compilation on-the-fly. Code changes are served immediately upon browser refresh.
 - **PRODUCTION BUILD TRIGGER**: Build and compilation steps (`compile_applet`, `npm run build`, and production packaging) MUST ONLY be executed when the user explicitly commands: **"siap produksi"**.
 - For all regular iterations: make code edits cleanly, ensure type stability, and tell the user to simply refresh their browser.
+

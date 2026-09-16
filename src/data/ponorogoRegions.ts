@@ -327,6 +327,16 @@ export const PONOROGO_DISTRICTS: Record<string, string[]> = {
     'Desa Bareng',
     'Desa Krisik',
     'Desa Tambang'
+  ],
+  'Kecamatan Ngebel': [
+    'Desa Ngebel',
+    'Desa Gondowido',
+    'Desa Pupus',
+    'Desa Sahang',
+    'Desa Sempu',
+    'Desa Talun',
+    'Desa Wagir Lor',
+    'Desa Ngrogung'
   ]
 };
 

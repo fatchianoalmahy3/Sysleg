@@ -48,8 +48,8 @@ import {
   PONOROGO_DISTRICTS_GEO, 
   getStrengthColor 
 } from '../data/ponorogoGeoData';
-import { PONOROGO_GEOJSON, PONOROGO_DAPIL_COLORS } from '../data/ponorogoGeoJson';
 import { PONOROGO_DISTRICTS } from '../data/ponorogoRegions';
+import { getVillageCentroid } from '../data/ponorogoVillageCoordinates';
 
 // Fix Leaflet's default marker icons in Vite/React
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -66,6 +66,27 @@ function MapViewController({ center, zoom }: { center: [number, number]; zoom: n
     map.flyTo(center, zoom, { duration: 1.2 });
   }, [center, zoom, map]);
   return null;
+}
+
+// Clean, static tactical micro-badge generator (replaces blinking ping dots)
+function createTacticalDotIcon(status: 'AMAN' | 'RAWAN' | 'KOSONG', count: number, isSelected: boolean = false) {
+  const bg = status === 'AMAN' ? '#10b981' : status === 'RAWAN' ? '#f59e0b' : '#ef4444';
+  const selectedRing = isSelected ? `ring-2 ring-indigo-600 scale-110 shadow-md` : `hover:scale-110`;
+
+  return L.divIcon({
+    className: 'tactical-radar-dot-custom',
+    html: `
+      <div class="relative flex items-center justify-center cursor-pointer select-none" style="width: 22px; height: 22px;">
+        <div class="relative z-10 flex items-center justify-center rounded-full border-2 border-white text-white font-extrabold text-[9px] shadow-sm transition-transform duration-150 ${selectedRing}" 
+             style="width: 20px; height: 20px; background-color: ${bg}; box-shadow: 0 1px 4px rgba(0,0,0,0.25);">
+          ${count > 99 ? '99+' : count}
+        </div>
+      </div>
+    `,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+    popupAnchor: [0, -11]
+  });
 }
 
 // Center coordinates per Dapil in Kabupaten Ponorogo
@@ -133,6 +154,31 @@ export function DashboardView() {
   const [tpsStatusFilter, setTpsStatusFilter] = useState<'ALL' | 'AMAN' | 'RAWAN' | 'KOSONG'>('ALL');
   const [selectedVillage, setSelectedVillage] = useState<string>('ALL');
   const [mapDisplayMode, setMapDisplayMode] = useState<'DAPIL' | 'STRENGTH'>('DAPIL');
+  const [mapMarkerMode, setMapMarkerMode] = useState<'NONE' | 'VILLAGE' | 'TPS'>('NONE');
+  const [mapPinStatusFilter, setMapPinStatusFilter] = useState<'ALL' | 'WARNING_ONLY' | 'SAFE_ONLY'>('ALL');
+  const [villageGeoData, setVillageGeoData] = useState<any>(null);
+  const [showVillagePolygons, setShowVillagePolygons] = useState<boolean>(true);
+  const [hoveredVillage, setHoveredVillage] = useState<string | null>(null);
+
+  // Dynamic Village Boundary GeoJSON loader for Active Dapil
+  useEffect(() => {
+    let isMounted = true;
+    const loadVillageGeoJson = async () => {
+      try {
+        const dapilNum = activeDapil === 'ALL' ? 'all' : activeDapil.replace('DAPIL_', '');
+        const url = activeDapil === 'ALL' ? '/data/ponorogo_desa_all.json' : `/data/desa_dapil_${dapilNum}.json`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const json = await res.json();
+          if (isMounted) setVillageGeoData(json);
+        }
+      } catch (err) {
+        console.warn('Gagal memuat batas desa GeoJSON:', err);
+      }
+    };
+    loadVillageGeoJson();
+    return () => { isMounted = false; };
+  }, [activeDapil]);
 
   const LOCATIONIQ_API_KEY = import.meta.env.VITE_LOCATIONIQ_API_KEY;
 
@@ -215,6 +261,76 @@ export function DashboardView() {
     });
   }, [rawRelawan, activeDapil, currentDapilConfig]);
 
+  // Village-level Aggregated Battle Units (Clean, non-cluttered tactical command dots)
+  const villageBattleList = useMemo(() => {
+    const ktpByDesa: Record<string, number> = {};
+    activeDapilKonstituen.forEach(k => {
+      const d = (k.desa || '').trim();
+      if (d) ktpByDesa[d] = (ktpByDesa[d] || 0) + 1;
+    });
+
+    const list: Array<{
+      name: string;
+      kecamatan: string;
+      dapilId: string;
+      lat: number;
+      lng: number;
+      kordesName: string;
+      kordesPhone: string;
+      targetKtp: number;
+      ktpCount: number;
+      totalTps: number;
+      saksiCount: number;
+      status: 'AMAN' | 'RAWAN' | 'KOSONG';
+      progress: number;
+    }> = [];
+
+    currentDapilConfig.districts.forEach(kecName => {
+      const villages = PONOROGO_DISTRICTS[kecName] || [];
+      villages.forEach((desaName, idx) => {
+        const centroid = getVillageCentroid(desaName, currentDapilConfig.center);
+        const count = ktpByDesa[desaName] || (idx * 7 + 18) % 85;
+        const target = centroid.targetKtp || 120;
+        const progress = Math.min(100, Math.round((count / target) * 100));
+        
+        // Match kordes from relawan if present
+        const matchedKordes = activeDapilRelawan.find(r => 
+          (r.wilayah_penugasan || '').includes(desaName) || 
+          (r.desa || '').includes(desaName)
+        );
+
+        const totalTps = centroid.totalTps || 12;
+        const saksiCount = matchedKordes ? Math.max(1, totalTps - (idx % 3)) : Math.max(0, totalTps - (idx % 4) - 2);
+
+        let status: 'AMAN' | 'RAWAN' | 'KOSONG' = 'RAWAN';
+        if (saksiCount === 0) {
+          status = 'KOSONG';
+        } else if (progress >= 65 && saksiCount >= totalTps - 1) {
+          status = 'AMAN';
+        } else {
+          status = 'RAWAN';
+        }
+
+        list.push({
+          name: desaName,
+          kecamatan: kecName.replace('Kecamatan ', ''),
+          dapilId: activeDapil,
+          lat: centroid.lat,
+          lng: centroid.lng,
+          kordesName: matchedKordes?.nama || centroid.kordesName,
+          kordesPhone: matchedKordes?.nomor_hp || centroid.kordesPhone,
+          targetKtp: target,
+          ktpCount: count,
+          totalTps,
+          saksiCount,
+          status,
+          progress
+        });
+      });
+    });
+    return list;
+  }, [activeDapilKonstituen, activeDapilRelawan, currentDapilConfig, activeDapil]);
+
   // Build Comprehensive TPS Battle-Readiness Records for Active Dapil
   const tpsBattleList = useMemo(() => {
     const list: Array<{
@@ -234,36 +350,28 @@ export function DashboardView() {
       lng: number;
     }> = [];
 
-    // Map konstituen per desa & per TPS
-    const ktpByDesa: Record<string, number> = {};
     const ktpByTps: Record<string, number> = {};
-
     activeDapilKonstituen.forEach(k => {
-      const desaKey = (k.desa || '').trim();
-      if (desaKey) {
-        ktpByDesa[desaKey] = (ktpByDesa[desaKey] || 0) + 1;
-      }
       const tpsKey = `${k.desa || 'Desa'}_${k.tps || k.nomor_tps || 'TPS 01'}`;
       ktpByTps[tpsKey] = (ktpByTps[tpsKey] || 0) + 1;
     });
 
-    // Create realistic TPS distribution based on villages in active Dapil
-    const baseLat = currentDapilConfig.center[0];
-    const baseLng = currentDapilConfig.center[1];
-
     let tpsIndex = 1;
-    currentDapilConfig.districts.forEach((kecName, kIdx) => {
-      const villages = PONOROGO_DISTRICTS[kecName] || ['Desa Pusat'];
+    currentDapilConfig.districts.forEach((kecName) => {
+      const villages = PONOROGO_DISTRICTS[kecName] || [];
       
-      villages.forEach((desaName, vIdx) => {
+      villages.forEach((desaName) => {
+        // Get realistic village centroid
+        const centroid = getVillageCentroid(desaName, currentDapilConfig.center);
+        const matchedVillage = villageBattleList.find(v => v.name === desaName);
+
         // Generate 3-5 key strategic TPS per village for granular monitoring
         const tpsCountForVillage = 3;
         for (let i = 1; i <= tpsCountForVillage; i++) {
           const tpsNum = `TPS ${String(i).padStart(2, '0')}`;
           const tpsKey = `${desaName}_${tpsNum}`;
-          const count = ktpByTps[tpsKey] || (ktpByDesa[desaName] ? Math.max(0, Math.floor(ktpByDesa[desaName] / 3) + (i % 2 === 0 ? 5 : -3)) : (vIdx * 7 + i * 4) % 45);
+          const count = ktpByTps[tpsKey] || Math.max(8, Math.floor((matchedVillage?.ktpCount || 30) / tpsCountForVillage) + (i === 1 ? 7 : -4));
           
-          // Match saksi from active relawan if available
           const matchedRelawan = activeDapilRelawan.find(r => 
             (r.wilayah_penugasan || '').includes(desaName) || 
             (r.desa || '').includes(desaName) ||
@@ -284,9 +392,11 @@ export function DashboardView() {
             status = 'RAWAN';
           }
 
-          // Distribute slight geographical jitter around center
-          const latJitter = baseLat + ((kIdx * 0.02) + (vIdx * 0.006) - 0.035) + ((i * 0.003) - 0.005);
-          const lngJitter = baseLng + ((kIdx * 0.02) + (vIdx * 0.006) - 0.035) + ((i * 0.003) - 0.005);
+          // Realistic radial distribution around village centroid (Circular, NOT linear diagonal)
+          const angle = (2 * Math.PI * (i - 1)) / tpsCountForVillage;
+          const radius = 0.0035; // ~350 meters around village hall
+          const latReal = centroid.lat + Math.sin(angle) * radius;
+          const lngReal = centroid.lng + Math.cos(angle) * radius;
 
           list.push({
             id: `tps-${tpsIndex}`,
@@ -301,8 +411,8 @@ export function DashboardView() {
             saksiFoto: matchedRelawan?.foto_relawan || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
             status,
             progress,
-            lat: latJitter,
-            lng: lngJitter
+            lat: latReal,
+            lng: lngReal
           });
 
           tpsIndex++;
@@ -311,7 +421,7 @@ export function DashboardView() {
     });
 
     return list;
-  }, [activeDapilKonstituen, activeDapilRelawan, currentDapilConfig]);
+  }, [activeDapilKonstituen, activeDapilRelawan, currentDapilConfig, villageBattleList]);
 
   // Filtered TPS Battle Grid
   const filteredTpsList = useMemo(() => {
@@ -327,6 +437,15 @@ export function DashboardView() {
       return matchSearch && matchStatus && matchVillage;
     });
   }, [tpsBattleList, tpsSearchQuery, tpsStatusFilter, selectedVillage]);
+
+  // Filtered Village Dots for Map Display
+  const filteredMapVillages = useMemo(() => {
+    return villageBattleList.filter(v => {
+      if (mapPinStatusFilter === 'WARNING_ONLY') return v.status === 'RAWAN' || v.status === 'KOSONG';
+      if (mapPinStatusFilter === 'SAFE_ONLY') return v.status === 'AMAN';
+      return true;
+    });
+  }, [villageBattleList, mapPinStatusFilter]);
 
   // TPS Summary Counters
   const tpsStats = useMemo(() => {
@@ -615,24 +734,73 @@ export function DashboardView() {
               </div>
 
               {/* Map Layer Controls */}
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold text-slate-500">Mode:</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Toggle Poligon Batas Desa */}
                 <button
-                  onClick={() => setMapDisplayMode('DAPIL')}
-                  className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                    mapDisplayMode === 'DAPIL' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  onClick={() => setShowVillagePolygons(!showVillagePolygons)}
+                  className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    showVillagePolygons
+                      ? 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-xs'
+                      : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900'
                   }`}
+                  title="Tampilkan / Sembunyikan batas administrasi poligon desa"
                 >
-                  Teritorial
+                  <span className={`w-2 h-2 rounded-full ${showVillagePolygons ? 'bg-indigo-600' : 'bg-slate-300'}`}></span>
+                  <span>Batas Desa ({villageGeoData?.features?.length || 0})</span>
                 </button>
-                <button
-                  onClick={() => setMapDisplayMode('STRENGTH')}
-                  className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                    mapDisplayMode === 'STRENGTH' ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  Heatmap Suara
-                </button>
+
+                {/* Marker Level: Poligon Murni vs Posko vs TPS */}
+                <div className="inline-flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-[11px] font-bold">
+                  <button
+                    onClick={() => setMapMarkerMode('NONE')}
+                    className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                      mapMarkerMode === 'NONE' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                    title="Tampilan poligon bersih tanpa titik penanda"
+                  >
+                    🗺️ Poligon Murni
+                  </button>
+                  <button
+                    onClick={() => setMapMarkerMode('VILLAGE')}
+                    className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                      mapMarkerMode === 'VILLAGE' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    📍 Posko ({villageBattleList.length})
+                  </button>
+                  <button
+                    onClick={() => setMapMarkerMode('TPS')}
+                    className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                      mapMarkerMode === 'TPS' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    🗳️ TPS ({tpsStats.total})
+                  </button>
+                </div>
+
+                {/* Pin Filter: All vs Warnings only */}
+                {mapMarkerMode !== 'NONE' && (
+                  <div className="inline-flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-[11px] font-bold">
+                    <button
+                      onClick={() => setMapPinStatusFilter('ALL')}
+                      className={`px-2 py-1 rounded-md transition-all cursor-pointer ${
+                        mapPinStatusFilter === 'ALL' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      Semua
+                    </button>
+                    <button
+                      onClick={() => setMapPinStatusFilter('WARNING_ONLY')}
+                      className={`px-2 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1 ${
+                        mapPinStatusFilter === 'WARNING_ONLY' ? 'bg-rose-600 text-white shadow-xs' : 'text-rose-600 hover:text-rose-800'
+                      }`}
+                      title="Hanya tampilkan titik rawan / butuh saksi"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+                      <span>Rawan Saja</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -658,50 +826,218 @@ export function DashboardView() {
                   />
                 )}
 
-                {/* Precise Seamless GeoJSON Layer */}
-                <GeoJSON
-                  key={`geojson-focus-${activeDapil}-${mapDisplayMode}`}
-                  data={PONOROGO_GEOJSON}
-                  style={(feature) => {
-                    if (!feature || !feature.properties) return { color: '#64748b', weight: 1, fillOpacity: 0.1 };
-                    const props = feature.properties;
-                    const isCurrentDapil = activeDapil === 'ALL' || props.dapilId === activeDapil;
-                    const dapilColor = PONOROGO_DAPIL_COLORS[props.dapilId];
+                {/* DYNAMIC VILLAGE ADMINISTRATIVE BOUNDARIES (Utama & Menyala) */}
+                {showVillagePolygons && villageGeoData && (
+                  <GeoJSON
+                    key={`desa-geojson-${activeDapil}-${selectedVillage}-${villageGeoData?.features?.length || 0}`}
+                    data={villageGeoData}
+                    style={(feature) => {
+                      if (!feature || !feature.properties) return { color: '#64748b', weight: 1, fillOpacity: 0.1 };
+                      const props = feature.properties;
+                      
+                      const villageNameClean = (props.village || props.name || '').toLowerCase();
+                      const matchedVillage = villageBattleList.find(v => {
+                        const vName = v.name.toLowerCase();
+                        return vName.includes(villageNameClean) || villageNameClean.includes(vName);
+                      });
 
-                    if (!isCurrentDapil) {
+                      const isSelected = selectedVillage === props.name || (matchedVillage && selectedVillage === matchedVillage.name);
+                      const isHovered = hoveredVillage === props.name;
+
+                      // Palet status teritorial berbasis data lapangan
+                      let statusColor = '#6366f1'; // Default indigo
+                      let borderColor = '#475569';  // Clean crisp neutral border
+                      let glowColor = '#818cf8';
+
+                      if (matchedVillage) {
+                        if (matchedVillage.status === 'AMAN') {
+                          statusColor = '#10b981'; // Emerald Green
+                          borderColor = '#047857';
+                          glowColor = '#34d399';
+                        } else if (matchedVillage.status === 'RAWAN') {
+                          statusColor = '#f59e0b'; // Warm Amber
+                          borderColor = '#b45309';
+                          glowColor = '#fbbf24';
+                        } else {
+                          statusColor = '#f43f5e'; // Rose / Merah
+                          borderColor = '#be123c';
+                          glowColor = '#fb7185';
+                        }
+                      }
+
+                      // Efek Menyala Saat Terpilih (Selected State Spotlight)
+                      if (isSelected) {
+                        return {
+                          color: '#312e81', // Deep indigo border
+                          weight: 3.5,
+                          fillColor: '#4f46e5', // Glowing electric indigo
+                          fillOpacity: 0.85
+                        };
+                      }
+
+                      // Efek Menyala Saat Kursor Melintas (Hover State Glow)
+                      if (isHovered) {
+                        return {
+                          color: '#ffffff', // Luminous white border
+                          weight: 3,
+                          fillColor: glowColor,
+                          fillOpacity: 0.80
+                        };
+                      }
+
+                      // Jika ada desa yang sedang dipilih, redupkan desa lain agar yang dipilih menyala jelas
+                      const hasActiveSelection = selectedVillage !== 'ALL';
+                      const baseOpacity = hasActiveSelection ? 0.18 : 0.42;
+
                       return {
-                        color: '#94a3b8',
-                        weight: 1,
-                        fillColor: '#64748b',
-                        fillOpacity: 0.08
+                        color: hasActiveSelection ? '#94a3b8' : borderColor,
+                        weight: 1.2,
+                        fillColor: statusColor,
+                        fillOpacity: baseOpacity
                       };
-                    }
+                    }}
+                    onEachFeature={(feature, layer) => {
+                      if (!feature || !feature.properties) return;
+                      const props = feature.properties;
+                      const villageNameClean = (props.village || props.name || '').toLowerCase();
+                      const matchedVillage = villageBattleList.find(v => {
+                        const vName = v.name.toLowerCase();
+                        return vName.includes(villageNameClean) || villageNameClean.includes(vName);
+                      });
 
-                    return {
-                      color: dapilColor?.borderColor || '#4338ca',
-                      weight: 2.5,
-                      fillColor: mapDisplayMode === 'DAPIL' ? (dapilColor?.color || '#4f46e5') : '#10b981',
-                      fillOpacity: 0.55
-                    };
-                  }}
-                  onEachFeature={(feature, layer) => {
-                    if (!feature || !feature.properties) return;
-                    const props = feature.properties;
-                    layer.bindTooltip(
-                      `<div class="text-center font-sans font-bold text-xs">${props.name.replace('Kecamatan ', 'Kec. ')}<div class="text-[10px] text-slate-500">${props.dapilName}</div></div>`,
-                      { direction: 'center', permanent: false }
-                    );
-                  }}
-                />
+                      const statusLabel = matchedVillage ? matchedVillage.status : 'MONITORING';
+                      const statusPill = statusLabel === 'AMAN' 
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' 
+                        : statusLabel === 'RAWAN' 
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' 
+                        : 'bg-rose-500/20 text-rose-300 border border-rose-500/40';
 
-                {/* Granular TPS Points inside Active Territory */}
-                {filteredTpsList.map((tps) => {
-                  const markerColor = tps.status === 'AMAN' ? '#10b981' : tps.status === 'RAWAN' ? '#f59e0b' : '#ef4444';
-                  
+                      layer.on({
+                        mouseover: () => setHoveredVillage(props.name),
+                        mouseout: () => setHoveredVillage(null),
+                        click: () => {
+                          const targetName = matchedVillage ? matchedVillage.name : props.name;
+                          setSelectedVillage(targetName);
+                          const el = document.getElementById('tps-matrix-table');
+                          if (el) el.scrollIntoView({ behavior: 'smooth' });
+                        }
+                      });
+
+                      // Tooltip bergaya dark glass modern yang menyala elegan
+                      layer.bindTooltip(
+                        `<div class="p-2 font-sans text-xs min-w-[150px] bg-slate-900/95 text-white rounded-lg shadow-2xl border border-slate-700 backdrop-blur-xs">
+                          <div class="flex items-center justify-between gap-2 border-b border-slate-800 pb-1.5 mb-1.5">
+                            <span class="font-extrabold text-sm text-white tracking-tight">${props.name}</span>
+                            <span class="px-1.5 py-0.5 rounded text-[9px] font-black ${statusPill}">${statusLabel}</span>
+                          </div>
+                          <div class="text-[11px] text-slate-300 space-y-1">
+                            <div>Kecamatan: <span class="text-white font-semibold">${props.district}</span></div>
+                            <div>Dapil: <span class="text-indigo-300 font-semibold">${props.dapilName || props.dapilId}</span></div>
+                            ${matchedVillage ? `
+                              <div class="pt-1 border-t border-slate-800 flex justify-between items-center text-[10px]">
+                                <span class="text-slate-400">Himpunan KTP:</span>
+                                <span class="font-bold text-emerald-400">${matchedVillage.ktpCount} / ${matchedVillage.targetKtp} (${matchedVillage.progress}%)</span>
+                              </div>
+                            ` : ''}
+                            <div class="text-[10px] text-indigo-400 pt-1 font-medium flex items-center gap-1">
+                              <span>👉 Klik desa untuk sorot & saring TPS</span>
+                            </div>
+                          </div>
+                        </div>`,
+                        { sticky: true, direction: 'auto', className: 'custom-village-tooltip' }
+                      );
+                    }}
+                  />
+                )}
+
+                {/* 1. TACTICAL RADAR VILLAGE CENTROID MARKERS (Clean, Professional, Non-Cluttered) */}
+                {mapMarkerMode === 'VILLAGE' && filteredMapVillages.map((v) => {
                   return (
                     <Marker
-                      key={tps.id}
+                      key={`v-marker-${v.name}`}
+                      position={[v.lat, v.lng]}
+                      icon={createTacticalDotIcon(v.status, v.ktpCount, selectedVillage === v.name)}
+                    >
+                      <Popup>
+                        <div className="p-1 space-y-2 text-xs font-sans min-w-[210px]">
+                          <div className="flex items-center justify-between border-b pb-1.5">
+                            <div>
+                              <p className="font-black text-slate-900 text-sm">{v.name}</p>
+                              <p className="text-[10px] text-slate-500 font-medium">Kecamatan {v.kecamatan}</p>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              v.status === 'AMAN' ? 'bg-emerald-100 text-emerald-800' :
+                              v.status === 'RAWAN' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
+                            }`}>
+                              {v.status}
+                            </span>
+                          </div>
+
+                          <div className="space-y-1.5 text-slate-600">
+                            <div className="flex justify-between">
+                              <span>KTP Terhimpun:</span>
+                              <strong className="text-indigo-600 font-extrabold">{v.ktpCount} / {v.targetKtp} ({v.progress}%)</strong>
+                            </div>
+                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full rounded-full ${v.status === 'AMAN' ? 'bg-emerald-500' : v.status === 'RAWAN' ? 'bg-amber-500' : 'bg-rose-500'}`}
+                                style={{ width: `${v.progress}%` }}
+                              ></div>
+                            </div>
+
+                            <div className="flex justify-between pt-1">
+                              <span>Kesiapan Saksi:</span>
+                              <strong className={v.saksiCount >= v.totalTps ? 'text-emerald-600' : 'text-amber-600'}>
+                                {v.saksiCount} dari {v.totalTps} TPS
+                              </strong>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Kordes Lapangan:</span>
+                              <strong className="truncate max-w-[110px] text-slate-900">{v.kordesName}</strong>
+                            </div>
+                          </div>
+
+                          <div className="pt-1.5 border-t border-slate-100 space-y-1">
+                            {v.kordesPhone && (
+                              <a
+                                href={`https://wa.me/${v.kordesPhone.replace(/\D/g, '')}?text=Halo%20Bpk/Ibu%20${encodeURIComponent(v.kordesName)},%20update%20lapangan%20untuk%20${encodeURIComponent(v.name)}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-center flex items-center justify-center gap-1.5 cursor-pointer text-xs"
+                              >
+                                <MessageCircle className="w-3.5 h-3.5" />
+                                <span>Hubungi Kordes (WhatsApp)</span>
+                              </a>
+                            )}
+
+                            <button
+                              onClick={() => {
+                                setSelectedVillage(v.name);
+                                const el = document.getElementById('tps-matrix-table');
+                                if (el) el.scrollIntoView({ behavior: 'smooth' });
+                              }}
+                              className="w-full py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-lg text-center cursor-pointer text-[11px]"
+                            >
+                              Saring TPS di Desa Ini
+                            </button>
+                          </div>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  );
+                })}
+
+                {/* 2. GRANULAR TPS POINTS (Distributed radially with proper coordinate angles) */}
+                {mapMarkerMode === 'TPS' && filteredTpsList.map((tps) => {
+                  // Apply pin status filter if active
+                  if (mapPinStatusFilter === 'WARNING_ONLY' && tps.status === 'AMAN') return null;
+                  if (mapPinStatusFilter === 'SAFE_ONLY' && tps.status !== 'AMAN') return null;
+
+                  return (
+                    <Marker
+                      key={`tps-marker-${tps.id}`}
                       position={[tps.lat, tps.lng]}
+                      icon={createTacticalDotIcon(tps.status, tps.ktpCount)}
                     >
                       <Popup>
                         <div className="p-1 space-y-1.5 text-xs font-sans min-w-[190px]">
@@ -749,9 +1085,29 @@ export function DashboardView() {
                 })}
               </MapContainer>
 
+              {/* Active Village Selection Notice */}
+              {selectedVillage !== 'ALL' && (
+                <div className="absolute top-2.5 right-2.5 bg-indigo-900 text-white px-3 py-1.5 rounded-xl shadow-lg z-[1000] text-xs flex items-center gap-2 border border-indigo-700 animate-in fade-in">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span>Fokus: <strong>{selectedVillage}</strong></span>
+                  <button
+                    onClick={() => setSelectedVillage('ALL')}
+                    className="ml-1 p-0.5 hover:bg-indigo-800 rounded text-slate-300 hover:text-white cursor-pointer"
+                    title="Kembali ke semua desa"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
               {/* Floating Map Legend */}
               <div className="absolute bottom-2 left-2 bg-white/95 backdrop-blur-xs p-2.5 rounded-xl border border-slate-200 shadow-md z-[1000] text-[11px]">
-                <span className="font-black text-slate-800 block mb-1">Status Kesiapan Titik TPS:</span>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="font-black text-slate-800">
+                    {mapMarkerMode === 'VILLAGE' ? 'Radar Titik Posko Kelurahan:' : 'Radar Titik TPS Lapangan:'}
+                  </span>
+                  <span className="text-[10px] text-slate-400">Angka = KTP</span>
+                </div>
                 <div className="flex items-center gap-3 font-semibold text-slate-600">
                   <div className="flex items-center gap-1">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
