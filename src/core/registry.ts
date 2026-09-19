@@ -449,7 +449,7 @@ export const MODULE_REGISTRY: ModuleSchema[] = [
     title: 'Pengaturan Kop Surat & Tagihan (Superadmin)',
     description: 'Konfigurasi kop surat resmi lembaga/konsultan pemenangan, kontak layanan, rekening bank invoice, dan catatan legalitas UU ITE untuk dokumen cetak.',
     icon: 'Settings',
-    allowedRoles: ['developer', 'superadmin', 'demo'],
+    allowedRoles: ['developer'],
     searchKeys: ['nama_lembaga', 'email_resmi', 'bank_nama'],
     fields: [
       { key: 'nama_lembaga', label: 'Nama Lembaga / Konsultan Pemenangan', type: 'text', validation: { required: true }, defaultValue: 'LEMBAGA KONSULTASI PEMENANGAN ELEKTORAL & TEKNOLOGI INFORMASI' },

@@ -349,50 +349,78 @@ export function Layout({
 
           {/* User Role & Package Tier Simulator Footer */}
           <div className="p-4 border-t border-slate-800 bg-[#0b0f19] space-y-3">
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-400 font-bold px-1">
-                <span className="flex items-center gap-1.5">
-                  <Key className="w-3 h-3 text-indigo-400" />
-                  Simulasi Tupoksi (Role)
-                </span>
-                <span className="text-[9px] text-indigo-400 font-mono">LIVE</span>
+            {/* Show Role Switcher Dropdown ONLY for Developer / Administrator */}
+            {(userRole === 'developer' || userRole === 'administrator') ? (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-400 font-bold px-1">
+                  <span className="flex items-center gap-1.5">
+                    <Key className="w-3 h-3 text-indigo-400" />
+                    Simulasi Tupoksi (Role)
+                  </span>
+                  <span className="text-[9px] text-indigo-400 font-mono">DEV MODE</span>
+                </div>
+                <select
+                  value={userRole}
+                  onChange={(e) => onRoleChange(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 hover:border-slate-600 rounded-xl text-xs py-2 px-3 text-slate-200 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                >
+                  {roles.map((r) => (
+                    <option key={r.value} value={r.value} className="bg-slate-900 text-white">
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <select
-                value={userRole}
-                onChange={(e) => onRoleChange(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 hover:border-slate-600 rounded-xl text-xs py-2 px-3 text-slate-200 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-              >
-                {roles.map((r) => (
-                  <option key={r.value} value={r.value} className="bg-slate-900 text-white">
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            ) : (
+              /* Clean Locked Profile Badge for Demo & Regular Users */
+              <div className="p-3 bg-slate-900/90 rounded-2xl border border-slate-800 space-y-1.5">
+                <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold">
+                  <span className="flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+                    MODE AKUN DEMO
+                  </span>
+                  <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20">
+                    TERKUNCI
+                  </span>
+                </div>
+                <div className="text-xs font-black text-white truncate">
+                  {userRole === 'relawan' && '📱 Relawan Lapangan (Canvasser)'}
+                  {userRole === 'koordinator' && '👥 Korcam / Korwil (Manajemen)'}
+                  {userRole === 'superadmin' && '👑 Caleg Utama (Kandidat)'}
+                  {userRole === 'demo' && '✨ Demo Klien Interaktif'}
+                  {!['relawan', 'koordinator', 'superadmin', 'demo'].includes(userRole) && userRole.replace(/_/g, ' ')}
+                </div>
+                <p className="text-[10px] text-slate-400 leading-tight">
+                  Akses terbatas sesuai Hak Akses (Tupoksi) role saat ini.
+                </p>
+              </div>
+            )}
 
-            {/* Package Tier Simulator */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-400 font-bold px-1">
-                <span className="flex items-center gap-1.5">
-                  <Sparkles className="w-3 h-3 text-amber-400" />
-                  Lisensi Paket SaaS
-                </span>
-                <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${TIER_CAPABILITIES[activePackageTier]?.badgeColor}`}>
-                  {activePackageTier}
-                </span>
+            {/* Package Tier Simulator - Only for Developer / Superadmin / Admin */}
+            {(userRole === 'developer' || userRole === 'administrator' || userRole === 'superadmin') && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-400 font-bold px-1">
+                  <span className="flex items-center gap-1.5">
+                    <Sparkles className="w-3 h-3 text-amber-400" />
+                    Lisensi Paket SaaS
+                  </span>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${TIER_CAPABILITIES[activePackageTier]?.badgeColor}`}>
+                    {activePackageTier}
+                  </span>
+                </div>
+                <select
+                  value={activePackageTier}
+                  onChange={(e) => handleTierChange(e.target.value as PackageTier)}
+                  className="w-full bg-slate-900 border border-slate-700 hover:border-slate-600 rounded-xl text-xs py-2 px-3 text-amber-300 font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                >
+                  <option value="BRONZE">🥉 Bronze Pratama (DPRD Kab/Kota)</option>
+                  <option value="SILVER">🥈 Silver Madya (DPRD Provinsi)</option>
+                  <option value="GOLD">🥇 Gold Utama (DPR-RI)</option>
+                  <option value="PLATINUM">💎 Platinum Senator (DPD-RI)</option>
+                  <option value="ENTERPRISE">👑 Enterprise Victory (Pilkada Kepala Daerah)</option>
+                </select>
               </div>
-              <select
-                value={activePackageTier}
-                onChange={(e) => handleTierChange(e.target.value as PackageTier)}
-                className="w-full bg-slate-900 border border-slate-700 hover:border-slate-600 rounded-xl text-xs py-2 px-3 text-amber-300 font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
-              >
-                <option value="BRONZE">🥉 Bronze Pratama (DPRD Kab/Kota)</option>
-                <option value="SILVER">🥈 Silver Madya (DPRD Provinsi)</option>
-                <option value="GOLD">🥇 Gold Utama (DPR-RI)</option>
-                <option value="PLATINUM">💎 Platinum Senator (DPD-RI)</option>
-                <option value="ENTERPRISE">👑 Enterprise Victory (Pilkada Kepala Daerah)</option>
-              </select>
-            </div>
+            )}
 
             {/* Sidebar Logout Button */}
             {onLogout && (
@@ -445,7 +473,13 @@ export function Layout({
             <div className="text-right hidden sm:block">
               <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Peran Saat Ini</div>
               <div className="text-xs font-extrabold text-indigo-600">
-                {userRole.replace(/_/g, ' ')}
+                {userRole === 'superadmin' && 'CALEG UTAMA'}
+                {userRole === 'koordinator' && 'KORCAM / TIM SES'}
+                {userRole === 'relawan' && 'RELAWAN LAPANGAN'}
+                {userRole === 'administrator' && 'SAAS ADMINISTRATOR'}
+                {userRole === 'developer' && 'DEVELOPER GOD MODE'}
+                {userRole === 'demo' && 'DEMO KLIEN'}
+                {!['superadmin', 'koordinator', 'relawan', 'administrator', 'developer', 'demo'].includes(userRole) && userRole.replace(/_/g, ' ')}
               </div>
             </div>
 

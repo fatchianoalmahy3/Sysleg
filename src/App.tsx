@@ -26,6 +26,19 @@ import {
   DatabaseZap
 } from 'lucide-react';
 
+// Helper function to normalize role identifiers to canonical system roles
+export const normalizeRole = (rawRole: string): string => {
+  if (!rawRole) return 'superadmin';
+  const r = rawRole.toUpperCase();
+  if (r === 'CALEG_UTAMA' || r === 'SUPER_ADMIN' || r === 'CALEG' || r === 'SUPERADMIN') return 'superadmin';
+  if (r === 'KORCAM' || r === 'TIM_SES' || r === 'KOORDINATOR') return 'koordinator';
+  if (r === 'RELAWAN_LAPANGAN' || r === 'RELAWAN' || r === 'SAKSI_TPS') return 'relawan';
+  if (r === 'ADMINISTRATOR' || r === 'ADMIN') return 'administrator';
+  if (r === 'DEVELOPER') return 'developer';
+  if (r === 'DEMO') return 'demo';
+  return rawRole.toLowerCase();
+};
+
 export default function App() {
   const [appState, setAppState] = useState<'landing' | 'app'>(() => {
     return localStorage.getItem('is_logged_in') ? 'app' : 'landing';
@@ -63,7 +76,8 @@ export default function App() {
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
 
   const [userRole, setUserRole] = useState(() => {
-    return localStorage.getItem('admin_active_role') || 'superadmin';
+    const stored = localStorage.getItem('admin_active_role') || 'superadmin';
+    return normalizeRole(stored);
   });
   
   const [userEmail, setUserEmail] = useState(() => {
@@ -128,7 +142,8 @@ export default function App() {
     setToasts(prev => prev.filter(t => t.id !== id));
   };
 
-  const handleLoginSuccess = (role: string, email: string) => {
+  const handleLoginSuccess = (rawRole: string, email: string) => {
+    const role = normalizeRole(rawRole);
     setUserRole(role);
     setUserEmail(email);
     localStorage.setItem('admin_active_role', role);
@@ -150,7 +165,15 @@ export default function App() {
     }
 
     setAppState('app');
-    showToast(`Berhasil masuk sebagai: ${role.replace('_', ' ')}`, 'success', 'Login Sukses');
+    const roleTitles: Record<string, string> = {
+      superadmin: 'CALEG UTAMA (KANDIDAT)',
+      koordinator: 'KORCAM / TIM SES',
+      relawan: 'RELAWAN LAPANGAN',
+      administrator: 'SAAS ADMIN OWNER',
+      developer: 'DEVELOPER GOD MODE',
+      demo: 'DEMO CLIENT INTERAKTIF'
+    };
+    showToast(`Berhasil masuk sebagai: ${roleTitles[role] || role.toUpperCase()}`, 'success', 'Login Sukses');
     
     // Auto-route based on role
     if (role === 'developer') {
@@ -160,7 +183,7 @@ export default function App() {
     } else if (role === 'administrator') {
       setActiveModuleId('user_relawan');
     } else if (role === 'koordinator') {
-      setActiveModuleId('rab_aspirasi');
+      setActiveModuleId('user_relawan');
     } else if (role === 'relawan') {
       setActiveModuleId('konstituen');
     } else {
