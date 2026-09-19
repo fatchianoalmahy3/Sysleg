@@ -100,6 +100,95 @@ export class ExcelService {
   }
 
   /**
+   * Unduh Template Khusus Format Berita Acara KPU DPT 2024 Kabupaten Ponorogo
+   */
+  public static downloadKpuDptTemplate() {
+    const sampleKpuRows = [
+      {
+        'NIK (16 Digit)': '3502011102780001',
+        'Nama Lengkap Pemilih': 'Bambang Supriyanto',
+        'Jenis Kelamin (L/P)': 'Laki-laki',
+        'Usia': 48,
+        'Provinsi': 'Jawa Timur',
+        'Kabupaten': 'Kabupaten Ponorogo',
+        'Kecamatan': 'Ponorogo (Kota)',
+        'Desa/Kelurahan': 'Kelurahan Mangkujayan',
+        'RW': '03',
+        'RT': '02',
+        'Nomor TPS': 'TPS 007',
+        'Status Afiliasi': 'LOYALIS_PASTI',
+        'Catatan Pemilih': 'Tokoh RT setempat, basis dukungan keluarga besar'
+      },
+      {
+        'NIK (16 Digit)': '3502014506820002',
+        'Nama Lengkap Pemilih': 'Sri Wahyuni, S.Pd.',
+        'Jenis Kelamin (L/P)': 'Perempuan',
+        'Usia': 44,
+        'Provinsi': 'Jawa Timur',
+        'Kabupaten': 'Kabupaten Ponorogo',
+        'Kecamatan': 'Ponorogo (Kota)',
+        'Desa/Kelurahan': 'Kelurahan Mangkujayan',
+        'RW': '03',
+        'RT': '02',
+        'Nomor TPS': 'TPS 007',
+        'Status Afiliasi': 'TARGET_PROSPEK',
+        'Catatan Pemilih': 'Guru PAUD, respon visi caleg sangat positif'
+      },
+      {
+        'NIK (16 Digit)': '3502022108950003',
+        'Nama Lengkap Pemilih': 'Dimas Anggara Pratama',
+        'Jenis Kelamin (L/P)': 'Laki-laki',
+        'Usia': 30,
+        'Provinsi': 'Jawa Timur',
+        'Kabupaten': 'Kabupaten Ponorogo',
+        'Kecamatan': 'Babadan',
+        'Desa/Kelurahan': 'Desa Ngunut',
+        'RW': '01',
+        'RT': '04',
+        'Nomor TPS': 'TPS 003',
+        'Status Afiliasi': 'SWING_VOTER',
+        'Catatan Pemilih': 'Pemuda sanggar reyog Ponorogo'
+      },
+      {
+        'NIK (16 Digit)': '3502031904790005',
+        'Nama Lengkap Pemilih': 'Suprapto Edi',
+        'Jenis Kelamin (L/P)': 'Laki-laki',
+        'Usia': 47,
+        'Provinsi': 'Jawa Timur',
+        'Kabupaten': 'Kabupaten Ponorogo',
+        'Kecamatan': 'Siman',
+        'Desa/Kelurahan': 'Desa Siman',
+        'RW': '04',
+        'RT': '02',
+        'Nomor TPS': 'TPS 005',
+        'Status Afiliasi': 'LOYALIS_PASTI',
+        'Catatan Pemilih': 'Ketua kelompok tani makmur Siman'
+      }
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(sampleKpuRows);
+    worksheet['!cols'] = [
+      { wch: 22 }, // NIK
+      { wch: 26 }, // Nama
+      { wch: 20 }, // JK
+      { wch: 8 },  // Usia
+      { wch: 14 }, // Prov
+      { wch: 20 }, // Kab
+      { wch: 18 }, // Kec
+      { wch: 24 }, // Desa
+      { wch: 8 },  // RW
+      { wch: 8 },  // RT
+      { wch: 12 }, // TPS
+      { wch: 18 }, // Status
+      { wch: 35 }  // Catatan
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Format KPU DPT 2024');
+    XLSX.writeFile(workbook, 'Template_KPU_DPT_Ponorogo_2024.xlsx');
+  }
+
+  /**
    * Parse uploaded .xlsx file against the Module Schema
    */
   public static async parseExcelFile(file: File, schema: ModuleSchema): Promise<ParsedImportRow[]> {
@@ -119,12 +208,36 @@ export class ExcelService {
             return;
           }
 
-          // Build mapping dictionary from Label or Key to Schema Field
+          // Build mapping dictionary from Label or Key to Schema Field + Common KPU Aliases
           const labelToFieldMap = new Map<string, typeof schema.fields[0]>();
           schema.fields.forEach((f) => {
             labelToFieldMap.set(f.label.toLowerCase().trim(), f);
             labelToFieldMap.set(f.key.toLowerCase().trim(), f);
           });
+
+          // Intelligent KPU & General Electoral Column Aliases
+          const findFieldByAlias = (col: string) => {
+            const cleanCol = col.toLowerCase().replace(/[^a-z0-9]/g, '');
+            for (const [key, field] of labelToFieldMap.entries()) {
+              const cleanKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+              if (cleanCol === cleanKey) return field;
+            }
+            // Heuristic aliases
+            if (cleanCol.includes('nik') || cleanCol.includes('noktp')) return schema.fields.find(f => f.key === 'nik');
+            if (cleanCol.includes('namapemilih') || cleanCol.includes('namalengkap') || cleanCol === 'nama') return schema.fields.find(f => f.key === 'nama' || f.key === 'name');
+            if (cleanCol.includes('jeniskelamin') || cleanCol === 'jk' || cleanCol === 'gender') return schema.fields.find(f => f.key === 'jenis_kelamin' || f.key === 'gender');
+            if (cleanCol.includes('kecamatan') || cleanCol === 'distrik') return schema.fields.find(f => f.key === 'kecamatan');
+            if (cleanCol.includes('desa') || cleanCol.includes('kelurahan')) return schema.fields.find(f => f.key === 'desa');
+            if (cleanCol.includes('tps') || cleanCol.includes('nomortps')) return schema.fields.find(f => f.key === 'nomor_tps' || f.key === 'tps_tugas');
+            if (cleanCol === 'rt' || cleanCol === 'nort') return schema.fields.find(f => f.key === 'rt');
+            if (cleanCol === 'rw' || cleanCol === 'norw') return schema.fields.find(f => f.key === 'rw');
+            if (cleanCol.includes('usia') || cleanCol.includes('umur')) return schema.fields.find(f => f.key === 'usia');
+            if (cleanCol.includes('afiliasi') || cleanCol.includes('statusafiliasi')) return schema.fields.find(f => f.key === 'status_afiliasi');
+            if (cleanCol.includes('targetsuara') || cleanCol === 'target') return schema.fields.find(f => f.key === 'target_suara');
+            if (cleanCol.includes('jumlahdpt') || cleanCol === 'dpt') return schema.fields.find(f => f.key === 'jumlah_dpt');
+            if (cleanCol.includes('statuswilayah') || cleanCol.includes('kuadran')) return schema.fields.find(f => f.key === 'status_wilayah');
+            return undefined;
+          };
 
           const results: ParsedImportRow[] = rawJson.map((row, idx) => {
             // Auto generate ID
@@ -135,14 +248,25 @@ export class ExcelService {
 
             // Map each row key to schema
             Object.entries(row).forEach(([colHeader, cellValue]) => {
-              const matchedField = labelToFieldMap.get(colHeader.toLowerCase().trim());
+              const matchedField = findFieldByAlias(colHeader);
               if (matchedField && matchedField.key !== 'id') {
                 let formattedVal: any = cellValue;
+
+                // Handle Gender normalization (L -> Laki-laki, P -> Perempuan)
+                if ((matchedField.key === 'jenis_kelamin' || matchedField.key === 'gender') && typeof cellValue === 'string') {
+                  const upperVal = cellValue.toUpperCase().trim();
+                  if (upperVal === 'L' || upperVal.startsWith('LAKI')) {
+                    formattedVal = 'Laki-laki';
+                  } else if (upperVal === 'P' || upperVal.startsWith('PEREMPUAN')) {
+                    formattedVal = 'Perempuan';
+                  }
+                }
+
                 if (matchedField.type === 'number') {
-                  const n = Number(cellValue);
+                  const n = Number(String(cellValue).replace(/[^0-9.-]+/g, ''));
                   formattedVal = isNaN(n) ? cellValue : n;
                 } else if (matchedField.type === 'location' && typeof cellValue === 'string') {
-                  formattedVal = { lat: -6.2088, lng: 106.8456, name: cellValue };
+                  formattedVal = { lat: -7.8687, lng: 111.4623, name: cellValue };
                 }
                 parsedData[matchedField.key] = formattedVal;
               }

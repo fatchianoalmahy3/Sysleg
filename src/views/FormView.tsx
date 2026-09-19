@@ -46,8 +46,8 @@ export function FormView({
   
   // Step logic: If new entry for OCR modules, start at step 1. Otherwise start at step 2.
   const [formStep, setFormStep] = useState<1 | 2>(isEditMode || !isOcrModule ? 2 : 1);
-  const userRole = typeof window !== 'undefined' ? localStorage.getItem('admin_active_role') || 'CALEG_UTAMA' : 'CALEG_UTAMA';
-  const isRelawan = userRole === 'RELAWAN_LAPANGAN';
+  const userRole = typeof window !== 'undefined' ? localStorage.getItem('admin_active_role') || 'superadmin' : 'superadmin';
+  const isRelawan = userRole === 'relawan';
 
   // Filter technical ID field from input fields via centralized helper
   const visibleFields = getVisibleFields(schema);
@@ -94,6 +94,72 @@ export function FormView({
       } else if (key === "kecamatan" || key === "kecamatan_tugas") {
         next[key.replace("kecamatan", "desa")] = "";
       }
+
+      // Automatic Calculation & Audit Engine for RAB, Anggaran, and LPJ
+      if (schema.id === 'rab_aspirasi' || schema.id === 'anggaran_kampanye' || schema.id === 'lpj_kegiatan') {
+        const vol = Number(next.volume) || 0;
+        const harga = Number(next.harga_satuan_diajukan || next.harga_satuan) || 0;
+        const targetSuara = Number(next.target_suara || next.target_suara_alokasi) || 1;
+        const subtotal = vol * harga;
+
+        if (schema.id === 'rab_aspirasi') {
+          // Automatic 5% emergency buffer calculation
+          const buffer5 = Math.round(subtotal * 0.05);
+          const totalCairWithBuffer = subtotal + buffer5;
+
+          next.subtotal_pokok = subtotal;
+          next.dana_darurat_5persen = buffer5;
+          next.alokasi_pemilih = totalCairWithBuffer;
+          next.cpv_unit = targetSuara > 0 ? Math.round(totalCairWithBuffer / targetSuara) : 0;
+          
+          if (!next.nomor_rab || next.nomor_rab === 'RAB-AUTO') {
+            const posCode = String(next.pos_anggaran || 'OPR').substring(0, 4).toUpperCase();
+            next.nomor_rab = `RAB-${(next.kecamatan || 'PNG').substring(0, 3).toUpperCase()}-${posCode}-${Math.floor(100 + Math.random() * 900)}`;
+          }
+
+          // Benchmark ceiling estimate calculation
+          let benchmarkPlafon = harga;
+          const pos = String(next.pos_anggaran || '');
+          if (pos.includes('HONOR_SAKSI')) benchmarkPlafon = 200000;
+          else if (pos.includes('BANNER')) benchmarkPlafon = 18000;
+          else if (pos.includes('MOBILISASI_HARI_H')) benchmarkPlafon = 50000;
+          else if (pos.includes('KONSUMSI')) benchmarkPlafon = 22000;
+          else if (pos.includes('TRANSPORT')) benchmarkPlafon = 60000;
+          else if (pos.includes('SOUND')) benchmarkPlafon = 1000000;
+          else if (pos.includes('ASPIRASI')) benchmarkPlafon = 80000;
+          else benchmarkPlafon = 25000;
+
+          next.estimasi_ai = Math.round(vol * benchmarkPlafon * 1.05); // including 5% buffer
+          if (harga > benchmarkPlafon * 1.25) {
+            next.status_audit_markup = 'PERINGATAN_MARKUP';
+          } else if (harga > benchmarkPlafon * 1.5) {
+            next.status_audit_markup = 'SANGAT_BOROS_EVALUASI';
+          } else {
+            next.status_audit_markup = 'WAJAR_SESUAI_PASAR';
+          }
+        }
+
+        if (schema.id === 'lpj_kegiatan') {
+          const danaDiterima = Number(next.dana_diterima) || 0;
+          const nominalTerpakai = Number(next.nominal_terpakai) || 0;
+          const sisaSilpa = danaDiterima - nominalTerpakai;
+
+          next.sisa_kas_silpa = sisaSilpa;
+          if (sisaSilpa > 0) {
+            next.status_silpa = 'LEBIH_KEMBALIKAN_KAS';
+          } else if (sisaSilpa < 0) {
+            next.status_silpa = 'DEFISIT_KLAIM_DARURAT';
+          } else {
+            next.status_silpa = 'PAS_SESUAI_PAGU';
+          }
+        }
+
+        if (schema.id === 'anggaran_kampanye') {
+          next.total_anggaran = subtotal;
+          next.cpv_terhitung = targetSuara > 0 ? Math.round(subtotal / targetSuara) : 0;
+        }
+      }
+
       return next;
     });
 
@@ -367,6 +433,7 @@ export function FormView({
                 ) : (
                   <input
                     type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : field.type === 'email' ? 'email' : field.type === 'phone' ? 'tel' : 'text'}
+                    inputMode={field.type === 'number' || field.key.includes('nik') || field.type === 'phone' ? 'numeric' : undefined}
                     disabled={isFieldLocked}
                     value={formData[field.key] !== undefined ? formData[field.key] : ''}
                     placeholder={field.placeholder || `Masukkan ${field.label.toLowerCase()}...`}

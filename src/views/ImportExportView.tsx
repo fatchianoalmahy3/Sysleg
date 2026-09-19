@@ -14,13 +14,9 @@ import {
   HelpCircle,
   Sparkles,
   RefreshCw,
-  Database,
-  Code2,
-  Copy,
   Layers
 } from 'lucide-react';
 import { ExcelService, ParsedImportRow } from '../services/excel';
-import { SqlGenerator } from '../utils/sqlGenerator';
 
 interface ImportExportViewProps {
   schema: ModuleSchema;
@@ -37,7 +33,7 @@ export function ImportExportView({
   onBulkImport,
   userRole
 }: ImportExportViewProps) {
-  const [activeTab, setActiveTab] = useState<'import' | 'export' | 'guide' | 'sql_migration'>('import');
+  const [activeTab, setActiveTab] = useState<'import' | 'export' | 'guide'>('import');
   
   // Import State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -48,7 +44,6 @@ export function ImportExportView({
 
   // Export State
   const [selectedFields, setSelectedFields] = useState<string[]>(() => schema.fields.map(f => f.key));
-  const [copiedSql, setCopiedSql] = useState(false);
 
   const canWrite = schema.allowedRoles.includes(userRole);
   const isSuperAdmin = userRole === 'SUPER_ADMIN';
@@ -134,17 +129,6 @@ export function ImportExportView({
     ExcelService.exportToExcel(customSchema, currentData, `${schema.id}_custom`);
   };
 
-  const handleCopySql = () => {
-    const sql = SqlGenerator.generatePostgresSchema([schema]);
-    navigator.clipboard.writeText(sql);
-    setCopiedSql(true);
-    setTimeout(() => setCopiedSql(false), 2000);
-  };
-
-  const handleDownloadFullSql = () => {
-    SqlGenerator.downloadSqlFile('database_migration_schema.sql');
-  };
-
   const validCount = importRows.filter(r => r.isValid).length;
   const invalidCount = importRows.length - validCount;
 
@@ -167,7 +151,7 @@ export function ImportExportView({
               <span className="text-xs font-bold text-slate-500">Pusat Data</span>
             </div>
             <h1 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-              Import, Export & SQL Engine Hub
+              Import & Export Excel Hub
             </h1>
           </div>
         </div>
@@ -197,15 +181,6 @@ export function ImportExportView({
             }`}
           >
             Format Skema
-          </button>
-          <button
-            onClick={() => setActiveTab('sql_migration')}
-            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === 'sql_migration' ? 'bg-indigo-600 text-white shadow-xs' : 'text-indigo-700 hover:text-indigo-900'
-            }`}
-          >
-            <Database className="w-3.5 h-3.5" />
-            <span>Supabase / SQL DDL</span>
           </button>
         </div>
       </div>
@@ -252,13 +227,24 @@ export function ImportExportView({
                 </p>
               </div>
 
-              <button
-                onClick={handleDownloadTemplate}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-300 rounded-xl transition-all cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5 text-slate-600" />
-                <span>Unduh Template .xlsx</span>
-              </button>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={handleDownloadTemplate}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-300 rounded-xl transition-all cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 text-slate-600" />
+                  <span>Unduh Template Standar .xlsx</span>
+                </button>
+                {(schema.id === 'data_dpt' || schema.id === 'konstituen' || schema.id === 'target_dapil_wilayah') && (
+                  <button
+                    onClick={() => ExcelService.downloadKpuDptTemplate()}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl transition-all cursor-pointer"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Unduh Format Resmi KPU Ponorogo 2024</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col justify-between space-y-4">
@@ -479,66 +465,6 @@ export function ImportExportView({
                 ))}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {/* Tab 4: SQL Migration & DDL Schema Engine */}
-      {activeTab === 'sql_migration' && (
-        <div className="bg-slate-900 rounded-3xl p-6 sm:p-8 text-white border border-indigo-500/30 shadow-xl space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 flex items-center gap-1">
-                  <Database className="w-3 h-3 text-emerald-400" />
-                  Universal PostgreSQL / Supabase Engine
-                </span>
-                <span className="text-[10px] font-mono px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 rounded-full font-bold">
-                  Zero-Code DB Migration
-                </span>
-              </div>
-              <h2 className="text-xl sm:text-2xl font-black text-white">
-                Skema SQL DDL & Portabilitas Database
-              </h2>
-              <p className="text-xs text-slate-400">
-                Skema tabel relasional PostgreSQL lengkap dengan B-Tree Index dan Row Level Security (RLS) otomatis untuk modul {schema.title}.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleCopySql}
-                className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 transition-colors cursor-pointer"
-              >
-                {copiedSql ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedSql ? 'Tersalin' : 'Salin SQL Tabel Ini'}</span>
-              </button>
-
-              <button
-                onClick={handleDownloadFullSql}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition-colors cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Unduh Full schema.sql (Seluruh Modul)</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Code Viewer */}
-          <div className="bg-slate-950 rounded-2xl p-4 border border-slate-800 font-mono text-xs text-indigo-300 overflow-x-auto max-h-80 leading-relaxed select-all">
-            <pre className="text-emerald-400">
-              {SqlGenerator.generatePostgresSchema([schema])}
-            </pre>
-          </div>
-
-          <div className="p-4 bg-white/5 rounded-2xl border border-white/10 text-xs text-slate-300 flex items-center gap-3">
-            <Sparkles className="w-5 h-5 text-amber-300 shrink-0" />
-            <div>
-              <strong className="text-white">Panduan Migrasi ke Supabase / PostgreSQL:</strong>
-              <p className="text-slate-400 mt-0.5">
-                Buka SQL Editor di Supabase Dashboard, lalu *paste* dan jalankan query di atas. Setelah itu, cukup atur konfigurasi <code>VITE_SUPABASE_URL</code> dan <code>VITE_SUPABASE_ANON_KEY</code> pada file environment tanpa perlu merombak kode frontend.
-              </p>
-            </div>
           </div>
         </div>
       )}

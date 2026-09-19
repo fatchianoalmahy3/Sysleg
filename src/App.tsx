@@ -15,6 +15,11 @@ import { ConfirmDialog } from './components/ConfirmDialog';
 import { FirebaseDataService, isConfigured } from './services/firebase';
 import { ApiService } from './services/api';
 import { 
+  classifyRegionPriority, 
+  auditExpenseItem, 
+  calculateCostPerVote 
+} from './services/electionMath';
+import { 
   Terminal, 
   ShieldAlert, 
   Code2,
@@ -53,11 +58,12 @@ export default function App() {
   }
 
   const [activeModuleId, setActiveModuleId] = useState('dashboard');
+  const [dashboardLens, setDashboardLens] = useState<'IKHTISAR' | 'PETA_TERITORI' | 'TPS_PASUKAN' | 'C1_REALCOUNT' | 'SEMUA'>('IKHTISAR');
   const [viewMode, setViewMode] = useState<PageViewMode | 'print'>('list');
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
 
   const [userRole, setUserRole] = useState(() => {
-    return localStorage.getItem('admin_active_role') || 'CALEG_UTAMA';
+    return localStorage.getItem('admin_active_role') || 'superadmin';
   });
   
   const [userEmail, setUserEmail] = useState(() => {
@@ -132,10 +138,10 @@ export default function App() {
     // Auto-inject Mock DNA Wilayah based on role to simulate Top-Down geofencing
     localStorage.setItem('user_provinsi', 'Jawa Timur');
     localStorage.setItem('user_kota', 'Kota Surabaya');
-    if (role === 'KORCAM') {
+    if (role === 'koordinator') {
       localStorage.setItem('user_kecamatan', 'Wonokromo');
       localStorage.setItem('user_desa', ''); // Covers all villages in Wonokromo
-    } else if (role === 'RELAWAN_LAPANGAN') {
+    } else if (role === 'relawan') {
       localStorage.setItem('user_kecamatan', 'Wonokromo');
       localStorage.setItem('user_desa', 'Darmo'); // Restricted to one village
     } else {
@@ -147,18 +153,18 @@ export default function App() {
     showToast(`Berhasil masuk sebagai: ${role.replace('_', ' ')}`, 'success', 'Login Sukses');
     
     // Auto-route based on role
-    if (role === 'SUPER_ADMIN') {
+    if (role === 'developer') {
       setActiveModuleId('saas_tenant_approval');
-    } else if (role === 'CALEG_UTAMA') {
+    } else if (role === 'superadmin' || role === 'demo') {
       setActiveModuleId('dashboard');
-    } else if (role === 'TIM_SES') {
+    } else if (role === 'administrator') {
       setActiveModuleId('user_relawan');
-    } else if (role === 'KORCAM') {
+    } else if (role === 'koordinator') {
       setActiveModuleId('rab_aspirasi');
-    } else if (role === 'RELAWAN_LAPANGAN') {
+    } else if (role === 'relawan') {
       setActiveModuleId('konstituen');
     } else {
-      setActiveModuleId('user_relawan');
+      setActiveModuleId('dashboard');
     }
   };
 
@@ -245,7 +251,7 @@ export default function App() {
             kota_tugas: values.kota || '',
             kecamatan_tugas: '',
             desa_tugas: '',
-            role: 'TIM_SES',
+            role: 'administrator',
             status: 'AKTIF',
             tenant_id: values.tenant_id,
             createdAt: new Date().toISOString()
@@ -280,6 +286,79 @@ export default function App() {
         );
       }
 
+      // AUTOMATION: Target Suara & Wilayah Gerilya Math
+      if (activeModule.id === 'target_dapil_wilayah') {
+        const target = Number(values.target_suara) || 0;
+        const terkunci = Number(values.suara_terkunci) || 0;
+        const dpt = Number(values.jumlah_dpt) || 1;
+        values.gap_suara = Math.max(0, target - terkunci);
+
+        const priority = classifyRegionPriority(dpt, target, terkunci);
+        if (!values.status_wilayah || values.status_wilayah.includes('BATTLEGROUND')) {
+          values.status_wilayah = priority.status === 'BASIS_HIJAU' 
+            ? 'BASIS_HIJAU (Aman / Loyal)' 
+            : priority.status === 'BATTLEGROUND_KUNING' 
+            ? 'BATTLEGROUND_KUNING (Medan Tempur Kritis)' 
+            : 'RAWAN_MERAH (Penetrasi Rendah)';
+        }
+        if (!values.catatan_strategi) {
+          values.catatan_strategi = priority.actionGuidance;
+        }
+      }
+
+      // AUTOMATION: Anggaran & Audit Mark-Up Otomatis Algoritma (Zero AI Cost)
+      if (activeModule.id === 'anggaran_kampanye') {
+        const vol = Number(values.volume) || 1;
+        const harga = Number(values.harga_satuan_diajukan) || 0;
+        const total = vol * harga;
+        values.total_anggaran = total;
+
+        const targetSuara = Number(values.target_suara_alokasi) || 1000;
+        const cpv = Math.round(total / targetSuara);
+        values.cpv_terhitung = cpv;
+
+        // Standar harga acuan pasar lokal Jawa Timur / Ponorogo
+        const STANDARD_PRICE_BENCHMARK: Record<string, { min: number; max: number }> = {
+          'Honor Saksi TPS (Hari-H & Rekap)': { min: 200000, max: 350000 },
+          'Cetak Spanduk / Banner MMT Outdoor': { min: 18000, max: 28000 },
+          'Konsumsi / Nasi Box Pertemuan Warga': { min: 15000, max: 25000 },
+          'Uang Transport Relawan Door-to-Door / Canvasser': { min: 50000, max: 100000 },
+          'Sewa Sound System & Tenda Pertemuan Warga': { min: 500000, max: 1500000 },
+          'Paket Sembako / Bantuan Aspirasi Sederhana': { min: 50000, max: 100000 },
+          'Bahan Sosialisasi / Kaos & Atribut': { min: 25000, max: 55000 }
+        };
+
+        const benchmark = STANDARD_PRICE_BENCHMARK[values.kategori_item] || { min: 10000, max: 250000 };
+        const audit = auditExpenseItem(harga, vol, benchmark.min, benchmark.max);
+
+        values.status_audit_algoritma = audit.status === 'PERINGATAN_MARKUP'
+          ? 'PERINGATAN_MARKUP'
+          : cpv > 150000
+          ? 'SANGAT_BOROS_EVALUASI'
+          : 'WAJAR_SESUAI_PASAR';
+
+        values.potensi_pemborosan = audit.wasteAmount;
+        values.catatan_audit = audit.notes + ` (Cost per Vote: Rp ${cpv.toLocaleString('id-ID')} / suara)`;
+      }
+
+      // AUTOMATION: Sainte-Laguë Status
+      if (activeModule.id === 'simulasi_sainte_lague') {
+        const totalSuara = Number(values.suara_total_partai) || 0;
+        if (totalSuara >= 15000) {
+          values.status_kursi = 'LOLOS_KURSI_AMAN';
+          values.kursi_diperoleh = Math.max(1, Math.floor(totalSuara / 15000));
+          values.selisih_suara_aman = Math.round(totalSuara * 0.15);
+        } else if (totalSuara >= 8000) {
+          values.status_kursi = 'KURSI_TERAKHIR_RAWAN';
+          values.kursi_diperoleh = 1;
+          values.selisih_suara_aman = Math.round(15000 - totalSuara);
+        } else {
+          values.status_kursi = 'BELUM_LOLOS_KURSI';
+          values.kursi_diperoleh = 0;
+          values.selisih_suara_aman = Math.max(0, 8000 - totalSuara);
+        }
+      }
+
       if (viewMode === 'edit' && selectedItem) {
         const updated = await updateItem(selectedItem.id, values);
         setSelectedItem(updated);
@@ -297,6 +376,12 @@ export default function App() {
             'Koneksi server terputus. Data baru tersimpan di antrean perangkat ini (Belum masuk Cloud DB).', 
             'warning', 
             'Tersimpan di Antrean Lokal'
+          );
+        } else if (userRole === 'demo') {
+          showToast(
+            'Simulasi Berhasil! Data pengujian telah ditambahkan ke sesi simulasi Anda.', 
+            'success', 
+            'Mode Simulasi Demo'
           );
         } else {
           showToast(
@@ -365,6 +450,8 @@ export default function App() {
       onLogout={handleLogout}
       onSyncSuccess={() => refresh()}
       onShowToast={showToast}
+      dashboardLens={dashboardLens}
+      onLensChange={setDashboardLens}
       onQuickAdd={() => {
         if (activeModuleId !== 'konstituen') {
           setActiveModuleId('konstituen');
@@ -374,7 +461,7 @@ export default function App() {
     >
       <div className="space-y-6 max-w-7xl mx-auto">
         {/* Developer Blueprint Toggle (Only for SUPER_ADMIN, discreet) */}
-        {userRole === 'SUPER_ADMIN' && (
+        {userRole === 'developer' && (
           <div className="flex items-center justify-between bg-slate-900/90 border border-slate-800 text-slate-300 px-4 py-2 rounded-xl text-xs">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
@@ -391,7 +478,7 @@ export default function App() {
         )}
 
         {/* Schema Blueprint Inspector (Collapsible for Superadmin) */}
-        {userRole === 'SUPER_ADMIN' && showBlueprint && (
+        {userRole === 'developer' && showBlueprint && (
           <div className="bg-slate-950 rounded-2xl overflow-hidden shadow-xl border border-slate-800 animate-in fade-in duration-200">
             <div className="px-5 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
               <span className="text-xs font-bold text-slate-200 flex items-center gap-2">
@@ -411,7 +498,7 @@ export default function App() {
         )}
 
         {/* RBAC Access Denied Guard */}
-        {isDashboard && !['SUPER_ADMIN', 'CALEG_UTAMA', 'TIM_SES'].includes(userRole) ? (
+        {isDashboard && !['developer', 'administrator', 'superadmin', 'demo'].includes(userRole) ? (
           <div className="bg-white border-2 border-dashed border-rose-200 rounded-2xl p-12 text-center space-y-4 shadow-xs">
             <div className="w-14 h-14 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
               <ShieldAlert className="w-7 h-7" />
@@ -439,7 +526,19 @@ export default function App() {
           /* Multi-Page Views Rendered based on viewMode */
           <div>
             {isDashboard ? (
-              <DashboardView />
+              <DashboardView 
+                userRole={userRole}
+                onSwitchRole={handleRoleChange}
+                activeSegmentProp={dashboardLens}
+                onSegmentChangeProp={setDashboardLens}
+                onNavigateModule={(moduleId, contextQuery) => {
+                  setActiveModuleId(moduleId);
+                  if (contextQuery) {
+                    setSearchQuery(contextQuery);
+                  }
+                  setViewMode('list');
+                }}
+              />
             ) : viewMode === 'list' && (
               <ListView
                 schema={activeModule}

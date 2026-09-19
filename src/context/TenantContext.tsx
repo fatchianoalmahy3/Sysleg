@@ -23,8 +23,8 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return localStorage.getItem(TENANT_NAME_KEY) || 'Workspace Pemenangan Caleg';
   });
 
-  const userRole = localStorage.getItem('admin_active_role') || 'CALEG_UTAMA';
-  const isSuperAdmin = userRole === 'SUPER_ADMIN';
+  const userRole = localStorage.getItem('admin_active_role') || 'superadmin';
+  const isSuperAdmin = userRole === 'developer';
 
   const setActiveTenantId = (tenantId: string) => {
     const cleanId = tenantId.trim() || 'TNT-DEFAULT';
@@ -66,13 +66,13 @@ export const useTenant = (): TenantContextType => {
     // Fallback if rendered outside provider
     const activeTenantId = localStorage.getItem(TENANT_STORAGE_KEY) || 'TNT-DEFAULT';
     const tenantName = localStorage.getItem(TENANT_NAME_KEY) || 'Workspace Pemenangan Caleg';
-    const userRole = localStorage.getItem('admin_active_role') || 'CALEG_UTAMA';
+    const userRole = localStorage.getItem('admin_active_role') || 'superadmin';
     return {
       activeTenantId,
       setActiveTenantId: (id: string) => localStorage.setItem(TENANT_STORAGE_KEY, id),
       tenantName,
       setTenantName: (name: string) => localStorage.setItem(TENANT_NAME_KEY, name),
-      isSuperAdmin: userRole === 'SUPER_ADMIN',
+      isSuperAdmin: userRole === 'developer',
       clearTenant: () => {
         localStorage.removeItem(TENANT_STORAGE_KEY);
         localStorage.removeItem(TENANT_NAME_KEY);

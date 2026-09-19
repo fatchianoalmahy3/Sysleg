@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { Upload, File, Image as ImageIcon, X, CheckCircle } from 'lucide-react';
+import { Upload, File, Image as ImageIcon, X, CheckCircle, Zap } from 'lucide-react';
 import { ApiService } from '../services/api';
+import { compressFieldImage } from '../utils/imageCompressor';
 
 interface MediaUploaderProps {
   value: string;
@@ -12,6 +13,7 @@ interface MediaUploaderProps {
 export function MediaUploader({ value, onChange, placeholder, label }: MediaUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [compressionInfo, setCompressionInfo] = useState<{ original: string; compressed: string; ratio: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -20,22 +22,49 @@ export function MediaUploader({ value, onChange, placeholder, label }: MediaUplo
 
     setIsUploading(true);
     setError(null);
+    setCompressionInfo(null);
 
     try {
-      // Read file as base64
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64String = reader.result as string;
+      let finalFile = file;
+      let dataUrlToUpload = '';
+
+      if (file.type.startsWith('image/')) {
         try {
-          const uploadedUrl = await ApiService.uploadFile(file.name, file.type, base64String);
-          onChange(uploadedUrl);
-        } catch (err: any) {
-          setError(err.message || 'Gagal mengunggah berkas.');
-        } finally {
-          setIsUploading(false);
+          const comp = await compressFieldImage(file, { applySharpening: true });
+          finalFile = comp.file;
+          dataUrlToUpload = comp.dataUrl;
+          
+          const origKb = (comp.originalSize / 1024).toFixed(0);
+          const compKb = (comp.compressedSize / 1024).toFixed(0);
+          setCompressionInfo({
+            original: `${origKb} KB`,
+            compressed: `${compKb} KB`,
+            ratio: comp.compressionRatio
+          });
+        } catch (compErr) {
+          console.warn('Compress error, fallback to raw image:', compErr);
         }
-      };
-      reader.readAsDataURL(file);
+      }
+
+      if (dataUrlToUpload) {
+        const uploadedUrl = await ApiService.uploadFile(finalFile.name, finalFile.type, dataUrlToUpload);
+        onChange(uploadedUrl);
+        setIsUploading(false);
+      } else {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const base64String = reader.result as string;
+          try {
+            const uploadedUrl = await ApiService.uploadFile(finalFile.name, finalFile.type, base64String);
+            onChange(uploadedUrl);
+          } catch (err: any) {
+            setError(err.message || 'Gagal mengunggah berkas.');
+          } finally {
+            setIsUploading(false);
+          }
+        };
+        reader.readAsDataURL(finalFile);
+      }
     } catch {
       setError('Gagal membaca berkas.');
       setIsUploading(false);
@@ -117,9 +146,17 @@ export function MediaUploader({ value, onChange, placeholder, label }: MediaUplo
               )}
               <div className="text-left">
                 <p className="text-xs font-semibold text-slate-700 truncate max-w-[180px]">Berkas Berhasil Terunggah</p>
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
-                  <CheckCircle className="w-3 h-3" /> READY
-                </span>
+                <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                    <CheckCircle className="w-3 h-3" /> READY
+                  </span>
+                  {compressionInfo && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">
+                      <Zap className="w-3 h-3 text-amber-500" />
+                      <span>{compressionInfo.compressed} ({compressionInfo.ratio}% Hemat)</span>
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
             <button

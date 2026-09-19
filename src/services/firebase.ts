@@ -185,7 +185,7 @@ export function clearModuleCache(moduleId?: string) {
 // Dynamic Tenant Helper
 export function getCurrentTenantId(): string {
   try {
-    const savedTenant = localStorage.getItem('active_caleg_tenant_id');
+    const savedTenant = localStorage.getItem('active_caleg_tenant_id') || localStorage.getItem('active_electoral_tenant_id');
     if (savedTenant && savedTenant.trim()) {
       return savedTenant.trim();
     }
@@ -287,15 +287,20 @@ export class FirebaseDataService {
 
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
-        // Multi-tenant check
-        if (
-          !collectionName.startsWith('saas_') && 
-          tenantId !== 'TNT-SUPERADMIN' &&
-          data.tenant_id && 
-          data.tenant_id !== tenantId && 
-          data.tenant_id !== 'TNT-DEFAULT'
-        ) {
-          return;
+        // Strict Multi-tenant partition filter:
+        // 1. Superadmin sees all
+        // 2. Default workspace (TNT-DEFAULT) sees default items
+        // 3. Registered Client Tenant sees ONLY documents strictly matching their own tenant_id
+        if (!collectionName.startsWith('saas_') && tenantId !== 'TNT-SUPERADMIN') {
+          if (tenantId === 'TNT-DEFAULT') {
+            if (data.tenant_id && data.tenant_id !== 'TNT-DEFAULT') {
+              return;
+            }
+          } else {
+            if (data.tenant_id !== tenantId) {
+              return;
+            }
+          }
         }
 
         items.push({

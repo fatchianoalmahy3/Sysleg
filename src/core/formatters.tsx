@@ -5,6 +5,26 @@ import { MapPin, FileText, ExternalLink, Download, Mail, Phone, CheckCircle, XCi
 /**
  * Filter out technical ID fields for clean end-user presentation
  */
+export function isCurrencyField(field: FieldSchema): boolean {
+  if (field.currency === true) return true;
+  if (field.currency === false) return false;
+  const key = field.key.toLowerCase();
+  const label = (field.label || "").toLowerCase();
+  const nonCur = ["dpt", "suara", "vote", "volume", "qty", "kuantitas", "jumlah_dpt", "target_suara", "suara_terkunci", "gap_suara", "nomor", "urut", "kursi", "margin", "safety_margin", "score", "bobot", "durasi", "persen", "persentase", "tps", "rt", "rw", "kuota"];
+  for (const p of nonCur) if (key.includes(p) || label.includes(p)) return false;
+  const cur = ["harga", "biaya", "anggaran", "dana", "nominal", "tarif", "plafon", "rab", "pemborosan", "cpv", "uang", "subtotal", "total_biaya", "gaji", "honor", "kas", "nilai"];
+  for (const p of cur) if (key.includes(p) || label.includes(p)) return true;
+  return false;
+}
+
+export function formatNumberFieldValue(field: FieldSchema, value: any): string {
+  const num = Number(value);
+  if (isNaN(num)) return String(value);
+  if (isCurrencyField(field)) return `Rp ${num.toLocaleString("id-ID")}`;
+  const formatted = num.toLocaleString("id-ID");
+  return field.unit ? `${formatted} ${field.unit}` : formatted;
+}
+
 export function getVisibleFields(schema: ModuleSchema): FieldSchema[] {
   return schema.fields.filter(f => f.key !== 'id');
 }
@@ -25,7 +45,7 @@ export function formatPlainString(field: FieldSchema, val: any): string {
   if (val === undefined || val === null || val === '') return '-';
   
   if (field.type === 'number') {
-    return formatCurrency(val);
+    return formatNumberFieldValue(field, val);
   }
   
   if (field.type === 'location' && val) {
@@ -54,18 +74,39 @@ export function formatPlainString(field: FieldSchema, val: any): string {
  * Universal badge color mapper for select/status fields
  */
 export function getSelectBadgeClasses(val: string): string {
-  const positive = ['Lunas', 'Elektronik', 'Teknologi', 'Aktif', 'Selesai', 'Disetujui', 'Terkonfirmasi'];
-  const warning = ['Menunggu Pembayaran', 'Sumber Daya Manusia', 'Pemasaran', 'Proses', 'Tertunda'];
-  const danger = ['Batal', 'Ditolak', 'Nonaktif', 'Kadaluarsa'];
+  const str = String(val);
+  const positive = [
+    'Lunas', 'Elektronik', 'Teknologi', 'Aktif', 'Selesai', 'Disetujui', 'Terkonfirmasi',
+    'TERVERIFIKASI_SAH', 'AUDIT_MATEMATIS_PAS_VALID', 'PASTI_COBLOS_100', 'SUDAH_TRANSFER_C1_VALID',
+    'SELESAI_SERAHKAN_C1', 'STANDBY_BUKA_TPS', 'SEDANG_REKAP_HITUNG', 'WAJAR_SESUAI_PASAR', 'LOLOS_KURSI_AMAN',
+    'BASIS_HIJAU (Aman / Loyal)'
+  ];
+  const info = [
+    'KEMUNGKINAN_BESAR_75', 'TPS_REGULER', 'TPS_LOKSUS_PESANTREN', 'TPS_LOKSUS_RUTAN', 'TPS_LOKSUS_RSUD',
+    'SIAP_DICAIRKAN'
+  ];
+  const warning = [
+    'Menunggu Pembayaran', 'Sumber Daya Manusia', 'Pemasaran', 'Proses', 'Tertunda',
+    'SELISIH_SUARA_WARNING', 'RAGU_SWING_50', 'MENUNGGU_VERIFIKASI', 'KURSI_TERAKHIR_RAWAN',
+    'PERINGATAN_MARKUP', 'BATTLEGROUND_KUNING (Medan Tempur Kritis)'
+  ];
+  const danger = [
+    'Batal', 'Ditolak', 'Nonaktif', 'Kadaluarsa',
+    'SUARA_CALEG_MELEBIHI_TOTAL', 'DITAHAN_C1_BELUM_LENGKAP', 'RAWAN_PINDAH_25', 'LOKASI_GPS_MENYIMPANG',
+    'DITOLAK_BURAM', 'SANGAT_BOROS_EVALUASI', 'BELUM_LOLOS_KURSI', 'RAWAN_MERAH (Penetrasi Rendah)'
+  ];
 
-  if (positive.includes(val)) {
-    return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  if (positive.some(p => str.includes(p))) {
+    return 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold';
   }
-  if (warning.includes(val)) {
-    return 'bg-amber-50 text-amber-700 border-amber-200';
+  if (info.some(i => str.includes(i))) {
+    return 'bg-sky-50 text-sky-700 border-sky-200 font-bold';
   }
-  if (danger.includes(val)) {
-    return 'bg-rose-50 text-rose-700 border-rose-200';
+  if (warning.some(w => str.includes(w))) {
+    return 'bg-amber-50 text-amber-700 border-amber-200 font-bold';
+  }
+  if (danger.some(d => str.includes(d))) {
+    return 'bg-rose-50 text-rose-700 border-rose-200 font-bold';
   }
   return 'bg-slate-100 text-slate-700 border-slate-200';
 }
@@ -89,13 +130,13 @@ export const FieldRenderer: React.FC<FieldRendererProps> = ({ field, value, mode
     if (mode === 'detail') {
       return (
         <p className="text-base sm:text-lg font-mono font-bold text-slate-900">
-          {formatCurrency(value)}
+          {formatNumberFieldValue(field, value)}
         </p>
       );
     }
     return (
       <span className="font-mono text-xs font-semibold text-slate-800">
-        {formatCurrency(value)}
+        {formatNumberFieldValue(field, value)}
       </span>
     );
   }

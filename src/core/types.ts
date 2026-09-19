@@ -34,17 +34,25 @@ export interface FieldSchema {
   defaultValue?: any;
   helpText?: string;
   readOnly?: boolean;
-  colSpan?: 1 | 2; // For responsive 2-column form grids
+  colSpan?: 1 | 2;
+  currency?: boolean;
+  unit?: string;
 }
+
+export type PackageTier = 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM' | 'ENTERPRISE';
 
 export interface ModuleSchema {
   id: string; // matches backend table name/endpoint (e.g. 'products')
   title: string;
   icon: string; // Lucide icon name
   allowedRoles: string[]; // Access roles
+  requiredTier?: PackageTier; // Feature gating by SaaS subscription package tier
   searchKeys?: string[]; // Keys to search by
   fields: FieldSchema[];
   description?: string;
+  actionLabels?: {
+    createButton?: string;
+  };
 }
 
 export type PageViewMode = 'list' | 'create' | 'edit' | 'detail' | 'import_export';
@@ -56,12 +64,12 @@ export interface AppNavigationState {
 }
 
 export type UserRole = 
-  | 'SUPER_ADMIN' 
-  | 'CALEG_UTAMA' 
-  | 'TIM_SES' 
-  | 'KORCAM' 
-  | 'RELAWAN_LAPANGAN' 
-  | 'SIMPATISAN_PENDING';
+  | 'developer'
+  | 'administrator'
+  | 'superadmin'
+  | 'koordinator'
+  | 'relawan'
+  | 'demo';
 
 export interface UserProfile {
   id: string;

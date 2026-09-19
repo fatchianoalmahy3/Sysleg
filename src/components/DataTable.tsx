@@ -159,16 +159,70 @@ export function DataTable({
     if (field.type === 'location') {
       return (
         <span className="inline-flex items-center gap-1 text-xs text-slate-700 font-medium">
-          <MapPin className="w-3.5 h-3.5 text-indigo-500" />
-          {val.name || `LAT: ${val.lat?.toFixed(2)}, LNG: ${val.lng?.toFixed(2)}`}
+          <MapPin className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+          <span className="truncate max-w-[160px]">{val.name || `LAT: ${val.lat?.toFixed(2)}, LNG: ${val.lng?.toFixed(2)}`}</span>
         </span>
       );
     }
 
     if (field.type === 'number') {
+      const num = Number(val);
+      if (isNaN(num)) return <span className="text-xs text-slate-700 font-medium">{val}</span>;
+
+      // Handle currency or specific units
+      if (field.currency || field.key.includes('harga') || field.key.includes('alokasi') || field.key.includes('honor') || field.key.includes('dana') || field.key.includes('subtotal') || field.key.includes('nominal') || field.key.includes('silpa') || field.key.includes('cpv') || field.key.includes('anggaran') || field.key.includes('pemborosan')) {
+        return (
+          <span className="font-mono text-xs font-semibold text-slate-800">
+            Rp {num.toLocaleString('id-ID')}{field.unit ? ` ${field.unit}` : ''}
+          </span>
+        );
+      }
       return (
-        <span className="font-mono text-xs font-semibold text-slate-800">
-          IDR {Number(val).toLocaleString('id-ID')}
+        <span className="font-mono text-xs font-bold text-slate-800">
+          {num.toLocaleString('id-ID')}{field.unit ? ` ${field.unit}` : ''}
+        </span>
+      );
+    }
+
+    if (field.type === 'boolean') {
+      return val ? (
+        <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+          Ya / Aktif
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+          Tidak / Nonaktif
+        </span>
+      );
+    }
+
+    if (field.type === 'select') {
+      const sVal = String(val);
+      // Status formatting
+      if (sVal.includes('PASTI_COBLOS') || sVal.includes('LOLOS_KURSI_AMAN') || sVal.includes('TERVERIFIKASI_SAH') || sVal.includes('WAJAR_SESUAI_PASAR') || sVal.includes('SELESAI') || sVal.includes('DISETUJUI') || sVal.includes('LUNAS') || sVal.includes('AKTIF') || sVal.includes('BASIS_HIJAU')) {
+        return (
+          <span className="inline-flex items-center text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+            {sVal.replace(/_/g, ' ')}
+          </span>
+        );
+      }
+      if (sVal.includes('WARNING') || sVal.includes('RAWAN') || sVal.includes('BATTLEGROUND') || sVal.includes('PENDING') || sVal.includes('MENUNGGU') || sVal.includes('STANDBY') || sVal.includes('SWING') || sVal.includes('LEBIH_KEMBALIKAN')) {
+        return (
+          <span className="inline-flex items-center text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+            {sVal.replace(/_/g, ' ')}
+          </span>
+        );
+      }
+      if (sVal.includes('MARKUP') || sVal.includes('BOROS') || sVal.includes('DITOLAK') || sVal.includes('BELUM_LOLOS') || sVal.includes('BELUM_HADIR') || sVal.includes('DEFISIT') || sVal.includes('SUSPEND')) {
+        return (
+          <span className="inline-flex items-center text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+            {sVal.replace(/_/g, ' ')}
+          </span>
+        );
+      }
+      return (
+        <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-lg bg-slate-100 text-slate-700 border border-slate-200">
+          {sVal.replace(/_/g, ' ')}
         </span>
       );
     }
@@ -282,14 +336,17 @@ export function DataTable({
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200 select-none">
-                  {schema.fields.map((field) => {
+                  {schema.fields.map((field, idx) => {
                     const isSorted = activeFilters.sortBy === field.key;
                     const isSortable = ['text', 'number', 'select'].includes(field.type);
+                    const isFirstCol = idx === 0;
                     return (
                       <th 
                         key={field.key} 
                         onClick={() => isSortable && handleHeaderSortClick(field.key)}
-                        className={`px-6 py-3.5 text-[10px] font-extrabold uppercase tracking-wider ${
+                        className={`px-5 py-3.5 text-[10px] font-extrabold uppercase tracking-wider ${
+                          isFirstCol ? 'sticky left-0 bg-slate-50 z-10 border-r border-slate-200/60' : ''
+                        } ${
                           isSortable ? 'cursor-pointer hover:bg-slate-100/70 transition-colors' : ''
                         } ${isSorted ? 'text-indigo-600' : 'text-slate-400'}`}
                       >
@@ -310,7 +367,7 @@ export function DataTable({
                       </th>
                     );
                   })}
-                  <th className="px-6 py-3.5 text-right text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                  <th className="px-5 py-3.5 text-right text-[10px] font-extrabold text-slate-400 uppercase tracking-wider sticky right-0 bg-slate-50 z-10 border-l border-slate-200/60">
                     Aksi
                   </th>
                 </tr>
@@ -336,12 +393,23 @@ export function DataTable({
                       className={`hover:bg-slate-50/70 transition-colors cursor-pointer ${selectedDetail?.id === item.id ? 'bg-indigo-50/40' : ''}`}
                       onClick={() => setSelectedDetail(item)}
                     >
-                      {schema.fields.map((field) => (
-                        <td key={field.key} className="px-6 py-3.5 whitespace-nowrap">
-                          {formatValue(field, item[field.key])}
-                        </td>
-                      ))}
-                      <td className="px-6 py-3.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      {schema.fields.map((field, idx) => {
+                        const isFirstCol = idx === 0;
+                        return (
+                          <td 
+                            key={field.key} 
+                            className={`px-5 py-3.5 whitespace-nowrap ${
+                              isFirstCol ? `sticky left-0 ${selectedDetail?.id === item.id ? 'bg-indigo-50/90' : 'bg-white'} z-10 border-r border-slate-200/60 font-semibold` : ''
+                            }`}
+                          >
+                            {formatValue(field, item[field.key])}
+                          </td>
+                        );
+                      })}
+                      <td 
+                        className={`px-5 py-3.5 text-right whitespace-nowrap sticky right-0 ${selectedDetail?.id === item.id ? 'bg-indigo-50/90' : 'bg-white'} z-10 border-l border-slate-200/60`} 
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             type="button"

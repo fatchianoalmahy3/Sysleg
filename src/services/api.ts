@@ -2,33 +2,27 @@ import { MODULE_REGISTRY } from '../core/registry';
 import { ModuleSchema } from '../core/types';
 import { IApiDriver, QueryOptions, PaginatedResult } from '../core/contracts/apiDriver';
 import { FirestoreDriver } from './drivers/firestoreDriver';
-import { SupabaseDriver } from './drivers/supabaseDriver';
-import { isSupabaseConfigured } from './supabase';
 import { transientQueue } from '../utils/transientQueue';
+import { syncPricingMatrixWithFirestore } from './dbSeeder';
 
 /**
  * Universal RESTful ApiService
  * Powered by Hexagonal Architecture / Driver Pattern
- * Supports zero-refactor migration between Firestore, Supabase PostgreSQL, and Custom APIs.
+ * Connects directly and exclusively to Cloud Firestore.
  */
 export class ApiService {
   private static firestoreDriver = new FirestoreDriver();
-  private static supabaseDriver = new SupabaseDriver();
   private static paginationPageMap = new Map<string, number>();
 
   /**
-   * Determine the active database driver dynamically.
-   * Priority: Supabase if configured & active, otherwise Firestore.
+   * Returns the active Firestore driver.
    */
   public static getActiveDriver(): IApiDriver {
-    if (isSupabaseConfigured()) {
-      return this.supabaseDriver;
-    }
     return this.firestoreDriver;
   }
 
   public static getActiveRole(): string {
-    return localStorage.getItem('admin_active_role') || 'CALEG_UTAMA';
+    return localStorage.getItem('admin_active_role') || 'superadmin';
   }
 
   public static getActiveTenantId(): string {
@@ -44,6 +38,11 @@ export class ApiService {
       } catch (err) {
         return false;
       }
+    });
+
+    // Auto-sync saas_pricing_matrix with latest tariff tiers in Firestore
+    syncPricingMatrixWithFirestore().catch((err) => {
+      console.warn('Non-blocking pricing matrix sync background alert:', err);
     });
 
     const driver = this.getActiveDriver();
@@ -81,7 +80,7 @@ export class ApiService {
       search,
       searchKeys: schema?.searchKeys || [],
       forceRefresh,
-      tenantId: role === 'SUPER_ADMIN' ? undefined : tenantId
+      tenantId: role === 'developer' ? undefined : tenantId
     };
 
     // Reset pagination page tracker on full fetch
@@ -107,11 +106,12 @@ export class ApiService {
       throw new Error(`Akses ditolak. Peran '${role}' tidak diizinkan mengakses modul ini.`);
     }
 
+    // Align tenant keys
     const tenantId = this.getActiveTenantId();
     const mergedOptions: QueryOptions = {
       ...options,
       searchKeys: schema?.searchKeys || [],
-      tenantId: role === 'SUPER_ADMIN' ? options.tenantId : tenantId
+      tenantId: role === 'developer' ? options.tenantId : tenantId
     };
 
     const driver = this.getActiveDriver();
@@ -145,7 +145,7 @@ export class ApiService {
     const role = this.getActiveRole();
     const tenantId = this.getActiveTenantId();
     const options: QueryOptions = {
-      tenantId: role === 'SUPER_ADMIN' ? undefined : tenantId
+      tenantId: role === 'developer' ? undefined : tenantId
     };
 
     const driver = this.getActiveDriver();
@@ -170,7 +170,7 @@ export class ApiService {
 
   public static async getRecordById(module: string, id: string): Promise<any> {
     const role = this.getActiveRole();
-    const tenantId = role === 'SUPER_ADMIN' ? undefined : this.getActiveTenantId();
+    const tenantId = role === 'developer' ? undefined : this.getActiveTenantId();
 
     const driver = this.getActiveDriver();
     try {
@@ -185,6 +185,10 @@ export class ApiService {
   public static async createRecord(module: string, payload: any, bypassQueue = false): Promise<any> {
     const schema = MODULE_REGISTRY.find((m) => m.id === module);
     const role = this.getActiveRole();
+    if (role === 'demo') {
+      alert('Mode Demo: Operasi penambahan data dinonaktifkan (Read-Only).');
+      return { ...payload, id: 'demo-' + Date.now() };
+    }
     if (schema && !schema.allowedRoles.includes(role)) {
       throw new Error(`Akses ditolak. Peran '${role}' tidak diizinkan menambahkan data.`);
     }
@@ -231,7 +235,12 @@ export class ApiService {
   }
 
   public static async updateRecord(module: string, id: string, payload: any): Promise<any> {
-    const tenantId = this.getActiveRole() === 'SUPER_ADMIN' ? undefined : this.getActiveTenantId();
+    const role = this.getActiveRole();
+    if (role === 'demo') {
+      alert('Mode Demo: Operasi pembaruan data dinonaktifkan (Read-Only).');
+      return payload;
+    }
+    const tenantId = role === 'developer' ? undefined : this.getActiveTenantId();
     const driver = this.getActiveDriver();
 
     try {
@@ -242,7 +251,12 @@ export class ApiService {
   }
 
   public static async deleteRecord(module: string, id: string): Promise<boolean> {
-    const tenantId = this.getActiveRole() === 'SUPER_ADMIN' ? undefined : this.getActiveTenantId();
+    const role = this.getActiveRole();
+    if (role === 'demo') {
+      alert('Mode Demo: Operasi penghapusan data dinonaktifkan (Read-Only).');
+      return true;
+    }
+    const tenantId = role === 'developer' ? undefined : this.getActiveTenantId();
     const driver = this.getActiveDriver();
 
     try {

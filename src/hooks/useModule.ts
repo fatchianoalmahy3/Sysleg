@@ -37,6 +37,29 @@ export function useModule(moduleId: string) {
 
       let finalRecords = records;
 
+      // Role & Spatial Geofencing Isolation Filter (Data Leakage Prevention)
+      const activeRole = localStorage.getItem('admin_active_role') || 'superadmin';
+      const userKecamatan = localStorage.getItem('user_kecamatan') || '';
+      const userDesa = localStorage.getItem('user_desa') || '';
+      const userEmail = localStorage.getItem('admin_email') || '';
+
+      if (activeRole === 'relawan' && moduleId === 'konstituen') {
+        // Canvasser Relawan only sees their own inputted constituents or assigned village
+        finalRecords = finalRecords.filter((rec: any) => 
+          rec.input_by === userEmail || 
+          (userDesa && rec.desa === userDesa) || 
+          (!rec.input_by && !rec.desa)
+        );
+      } else if (activeRole === 'koordinator' && userKecamatan) {
+        // Korcam Koordinator only sees records within their assigned kecamatan
+        if (['rab_aspirasi', 'lpj_kegiatan', 'target_dapil_wilayah', 'user_relawan', 'quick_count_c1'].includes(moduleId)) {
+          finalRecords = finalRecords.filter((rec: any) => {
+            const itemKec = rec.kecamatan || rec.kecamatan_tugas || rec.wilayah_kecamatan || rec.kecamatan_penugasan;
+            return !itemKec || itemKec === userKecamatan;
+          });
+        }
+      }
+
       // Auto-Seed default pricing matrix if empty and no search query
       if (records.length === 0 && !searchQuery && moduleId === 'saas_pricing_matrix') {
         try {

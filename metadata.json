@@ -1,6 +1,6 @@
 {
-  "name": "Low-Code Admin Starter Kit",
-  "description": "An optimal, DRY, and schema-driven Admin Starter Kit integrated with Cloud Firestore and Firebase Storage.",
-  "requestFramePermissions": [],
+  "name": "CAKRA ELEKTORAL - War Room & Sistem Pemenangan Ponorogo",
+  "description": "Sistem Intelijen Pemenangan Teritori, Pengawalan Saksi TPS, Audit Forensik C1 Plano, dan Simulasi Sainte-Laguë Ponorogo.",
+  "requestFramePermissions": ["geolocation", "camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
