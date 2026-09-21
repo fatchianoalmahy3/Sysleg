@@ -298,8 +298,13 @@ app.use(express.static(path.join(process.cwd(), 'public')));
 // Vite Middleware for Full Stack Dev & Prod Serving
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
+    const isHmrDisabled = process.env.DISABLE_HMR === 'true';
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { 
+        middlewareMode: true,
+        hmr: isHmrDisabled ? false : undefined,
+        watch: isHmrDisabled ? null : undefined,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
