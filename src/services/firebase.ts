@@ -23,19 +23,9 @@ import {
 } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, uploadString, getDownloadURL } from 'firebase/storage';
 
-// Safe Embedded Fallback (Approved by user for AI Studio Preview)
-// This prevents fatal crashes if the local JSON file is deleted.
-const AI_STUDIO_FALLBACK_CONFIG = {
-  apiKey: "AIzaSyBJXbPVzoXuxhMJSh5TUB3tIugNfFaq_Ww",
-  authDomain: "sysleg-5d4b8.firebaseapp.com",
-  projectId: "sysleg-5d4b8",
-  storageBucket: "sysleg-5d4b8.firebasestorage.app",
-  messagingSenderId: "434818810753",
-  appId: "1:434818810753:web:9e235fc848591d91be5e80",
-  firestoreDatabaseId: '(default)'
-};
+import firebaseAppletConfig from '../../firebase-applet-config.json';
 
-// Single Source of Truth: Vercel / AI Studio Secrets (Must use VITE_ prefix)
+// Single Source of Truth: Cloudflare Pages / Vercel / AI Studio Environment Variables (Must use VITE_ prefix)
 const getViteEnv = (key: string): string => {
   if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
     const val = (import.meta as any).env[key];
@@ -44,30 +34,27 @@ const getViteEnv = (key: string): string => {
   return '';
 };
 
-// Attempt to read from environment variables first (Production / Vercel)
+// Attempt to read from environment variables first (Production / Cloudflare Pages / Vercel)
 const envProjectId = getViteEnv('VITE_FIREBASE_PROJECT_ID');
-// KUNCI PAKSA (Bypass Total): Kita abaikan VITE_FIREBASE_PROJECT_ID dari AI Studio
-// agar aplikasi HANYA menembak ke sysleg-5d4b8 milik Anda.
-const isEnvConfigured = false; 
+const isEnvConfigured = Boolean(envProjectId);
 
-// Prioritize Vercel env vars, fallback to the safe embedded config
-const resolvedFirebaseConfig = isEnvConfigured ? {
-  apiKey: getViteEnv('VITE_FIREBASE_API_KEY'),
-  authDomain: getViteEnv('VITE_FIREBASE_AUTH_DOMAIN') || `${envProjectId}.firebaseapp.com`,
-  projectId: envProjectId,
-  storageBucket: getViteEnv('VITE_FIREBASE_STORAGE_BUCKET') || `${envProjectId}.appspot.com`,
-  messagingSenderId: getViteEnv('VITE_FIREBASE_MESSAGING_SENDER_ID'),
-  appId: getViteEnv('VITE_FIREBASE_APP_ID'),
-  firestoreDatabaseId: getViteEnv('VITE_FIREBASE_DATABASE_ID') || '(default)'
-} : AI_STUDIO_FALLBACK_CONFIG;
+// Prioritize environment variables, fallback to firebase-applet-config.json
+const resolvedFirebaseConfig = {
+  apiKey: isEnvConfigured ? (getViteEnv('VITE_FIREBASE_API_KEY') || firebaseAppletConfig.apiKey) : firebaseAppletConfig.apiKey,
+  authDomain: isEnvConfigured ? (getViteEnv('VITE_FIREBASE_AUTH_DOMAIN') || `${envProjectId}.firebaseapp.com`) : firebaseAppletConfig.authDomain,
+  projectId: isEnvConfigured ? envProjectId : firebaseAppletConfig.projectId,
+  storageBucket: isEnvConfigured ? (getViteEnv('VITE_FIREBASE_STORAGE_BUCKET') || `${envProjectId}.firebasestorage.app`) : firebaseAppletConfig.storageBucket,
+  messagingSenderId: isEnvConfigured ? (getViteEnv('VITE_FIREBASE_MESSAGING_SENDER_ID') || firebaseAppletConfig.messagingSenderId) : firebaseAppletConfig.messagingSenderId,
+  appId: isEnvConfigured ? (getViteEnv('VITE_FIREBASE_APP_ID') || firebaseAppletConfig.appId) : firebaseAppletConfig.appId,
+  firestoreDatabaseId: isEnvConfigured ? (getViteEnv('VITE_FIREBASE_DATABASE_ID') || firebaseAppletConfig.firestoreDatabaseId || '(default)') : (firebaseAppletConfig.firestoreDatabaseId || '(default)')
+};
 
 export const isConfigured = Boolean(resolvedFirebaseConfig.projectId);
 
 if (!isConfigured) {
   console.error(
     '🛑 [FIREBASE GUARDRAIL TRIPPED]: No valid Firebase configuration found. ' +
-    'The application has safely halted to prevent writing to a sandbox database. ' +
-    'Please provide credentials via VITE_FIREBASE_PROJECT_ID or firebase-local-secret.json.'
+    'Please provide credentials via VITE_FIREBASE_PROJECT_ID or firebase-applet-config.json.'
   );
 }
 
