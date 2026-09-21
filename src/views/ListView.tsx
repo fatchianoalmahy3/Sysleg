@@ -12,6 +12,7 @@ import {
 import { ExcelService } from '../services/excel';
 import { FilterModal, FilterState } from '../components/FilterModal';
 import { ModuleStatsGrid } from '../components/ModuleStatsGrid';
+import { PaginationBar } from '../components/PaginationBar';
 import { ListToolbar } from './list/ListToolbar';
 import { ListTableView } from './list/ListTableView';
 import { ListCardView } from './list/ListCardView';
@@ -85,6 +86,10 @@ export function ListView({
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [activeFilters, setActiveFilters] = useState<FilterState>(INITIAL_FILTER_STATE);
 
+  // Standardized pagination state (default 25 per page)
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(25);
+
   const canWrite = schema.allowedRoles.includes(userRole);
 
   const { activeFilterCount, filteredAndSortedData } = useListViewFilter({
@@ -93,6 +98,20 @@ export function ListView({
     searchQuery,
     activeFilters
   });
+
+  // Reset to page 1 whenever filter or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, activeFilters, data.length]);
+
+  // Compute paginated slice for current page
+  const totalFilteredCount = filteredAndSortedData.length;
+  const totalPages = Math.max(1, Math.ceil(totalFilteredCount / pageSize));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndexOffset = (safeCurrentPage - 1) * pageSize;
+  const paginatedData = useMemo(() => {
+    return filteredAndSortedData.slice(startIndexOffset, startIndexOffset + pageSize);
+  }, [filteredAndSortedData, startIndexOffset, pageSize]);
 
   const handleQuickExport = () => {
     if (filteredAndSortedData.length === 0) {
@@ -291,9 +310,10 @@ export function ListView({
         <ListTableView
           schema={schema}
           visibleFields={visibleFields}
-          data={filteredAndSortedData}
+          data={paginatedData}
           canWrite={canWrite}
           activeFilters={activeFilters}
+          startIndexOffset={startIndexOffset}
           onHeaderSortClick={handleHeaderSortClick}
           onDetailClick={onDetailClick}
           onEditClick={onEditClick}
@@ -303,21 +323,35 @@ export function ListView({
         <ListCardView
           schema={schema}
           visibleFields={visibleFields}
-          data={filteredAndSortedData}
+          data={paginatedData}
           canWrite={canWrite}
+          startIndexOffset={startIndexOffset}
           onDetailClick={onDetailClick}
           onEditClick={onEditClick}
           onDeleteClick={onDeleteClick}
         />
       )}
 
-      {/* 4. Interactive Infinite Pagination */}
+      {/* 4. Standardized Per-Page Pagination Bar */}
+      {totalFilteredCount > 0 && (
+        <PaginationBar
+          currentPage={safeCurrentPage}
+          totalItems={totalFilteredCount}
+          pageSize={pageSize}
+          onPageChange={(page) => setCurrentPage(page)}
+          onPageSizeChange={(size) => setPageSize(size)}
+          pageSizeOptions={[10, 25, 50, 100]}
+          serverTotalCount={totalServerCount}
+        />
+      )}
+
+      {/* 5. Cloud Lazy Loading Trigger (when server holds more records) */}
       {hasMore && onLoadMore && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <Database className="w-4 h-4 text-indigo-500 shrink-0" />
             <span>
-              Menampilkan <strong>{data.length}</strong> dari total <strong>{totalServerCount?.toLocaleString('id-ID') || data.length}</strong> data di Firestore.
+              Tersedia data tambahan di Firestore Cloud (Total terdaftar: <strong>{totalServerCount?.toLocaleString('id-ID') || data.length}</strong>).
             </span>
           </div>
 
@@ -325,17 +359,17 @@ export function ListView({
             type="button"
             onClick={onLoadMore}
             disabled={loadingMore}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 border border-indigo-200 rounded-xl transition-all shadow-xs cursor-pointer min-h-[42px] disabled:opacity-60"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-indigo-700 bg-white hover:bg-indigo-50 active:bg-indigo-100 border border-indigo-200 rounded-xl transition-all shadow-2xs cursor-pointer min-h-[38px] disabled:opacity-60"
           >
             {loadingMore ? (
               <>
-                <RefreshCw className="w-4 h-4 animate-spin text-indigo-600" />
-                <span>Memuat 100 Data Berikutnya...</span>
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+                <span>Mengunduh Data Cloud...</span>
               </>
             ) : (
               <>
-                <ChevronDown className="w-4 h-4 text-indigo-600" />
-                <span>Muat 100 Data Berikutnya</span>
+                <ChevronDown className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Unduh Halaman Cloud Berikutnya (+100)</span>
               </>
             )}
           </button>

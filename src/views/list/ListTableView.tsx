@@ -9,6 +9,7 @@ interface ListTableViewProps {
   data: any[];
   canWrite: boolean;
   activeFilters: { sortBy?: string; sortOrder?: 'asc' | 'desc' };
+  startIndexOffset?: number;
   onHeaderSortClick: (fieldKey: string) => void;
   onDetailClick: (item: any) => void;
   onEditClick: (item: any) => void;
@@ -20,6 +21,7 @@ export const ListTableView: React.FC<ListTableViewProps> = ({
   data,
   canWrite,
   activeFilters,
+  startIndexOffset = 0,
   onHeaderSortClick,
   onDetailClick,
   onEditClick,
@@ -75,7 +77,7 @@ export const ListTableView: React.FC<ListTableViewProps> = ({
                 onClick={() => onDetailClick(item)}
               >
                 <td className="px-5 py-4 text-xs font-mono text-slate-400">
-                  {idx + 1}
+                  {startIndexOffset + idx + 1}
                 </td>
                 {visibleFields.map((field) => (
                   <td key={field.key} className="px-5 py-4 whitespace-nowrap">

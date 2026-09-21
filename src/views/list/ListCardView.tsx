@@ -8,6 +8,7 @@ interface ListCardViewProps {
   visibleFields: FieldSchema[];
   data: any[];
   canWrite: boolean;
+  startIndexOffset?: number;
   onDetailClick: (item: any) => void;
   onEditClick: (item: any) => void;
   onDeleteClick: (id: string) => void;
@@ -17,6 +18,7 @@ export const ListCardView: React.FC<ListCardViewProps> = ({
   visibleFields,
   data,
   canWrite,
+  startIndexOffset = 0,
   onDetailClick,
   onEditClick,
   onDeleteClick
@@ -24,7 +26,8 @@ export const ListCardView: React.FC<ListCardViewProps> = ({
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {data.map((item, idx) => {
-        const cardTitle = item.nama_lengkap || item.nama_caleg || item.nama || item.nama_kegiatan || item.nama_barang || item.name || item.customer_name || item.action || `Entri #${idx + 1}`;
+        const itemNumber = startIndexOffset + idx + 1;
+        const cardTitle = item.nama_lengkap || item.nama_caleg || item.nama || item.nama_kegiatan || item.nama_barang || item.name || item.customer_name || item.action || `Entri #${itemNumber}`;
         const cardBadge = item.status_verifikasi || item.status || item.role || item.status_audit || item.category || item.department || item.payment_status;
         const photoUrl = typeof item.foto_ktp === 'string' && item.foto_ktp.startsWith('http') ? item.foto_ktp : (typeof item.foto === 'string' && item.foto.startsWith('http') ? item.foto : null);
         const waNumber = item.nomor_wa || item.no_wa || item.telepon;
@@ -48,7 +51,7 @@ export const ListCardView: React.FC<ListCardViewProps> = ({
                   )}
                   <div className="min-w-0">
                     <span className="text-[10px] font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md inline-block">
-                      #{idx + 1} • {String(item.id).substring(0, 8)}
+                      #{itemNumber} • {String(item.id).substring(0, 8)}
                     </span>
                     <h3 className="text-sm font-bold text-slate-900 mt-1 line-clamp-1 truncate">
                       {cardTitle}
