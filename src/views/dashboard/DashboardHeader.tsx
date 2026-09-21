@@ -12,6 +12,7 @@ import {
   Check 
 } from 'lucide-react';
 import { formatRupiah } from '../../utils/electoralData';
+import { activeFirebaseConfig } from '../../services/firebase';
 
 interface DashboardHeaderProps {
   calegInfo: any;
@@ -61,9 +62,13 @@ export function DashboardHeader({
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
               Kabupaten Ponorogo • KPU BA No. 425/2023
             </span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800/60 flex items-center gap-1">
+            <span 
+              className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800/60 flex items-center gap-1.5"
+              title={`Firestore Target: ${activeFirebaseConfig.projectId} (db: ${activeFirebaseConfig.firestoreDatabaseId})`}
+            >
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span>Cloud Firestore Aktif</span>
+              <span>Firestore: <strong>{activeFirebaseConfig.projectId}</strong></span>
+              <span className="text-[9px] text-emerald-400/70 font-mono">({activeFirebaseConfig.firestoreDatabaseId === '(default)' ? 'default' : 'custom'})</span>
             </span>
           </div>
 

@@ -17,6 +17,7 @@ import { SaksiFieldPortalModal } from './dashboard/SaksiFieldPortalModal';
 import { QuickVoterAddModal } from './dashboard/QuickVoterAddModal';
 import { DemoGuideCard } from '../components/DemoGuideCard';
 import { useDashboardMetrics } from './dashboard/useDashboardMetrics';
+import { activeFirebaseConfig } from '../services/firebase';
 import { 
   Flame, 
   Map, 
@@ -24,7 +25,9 @@ import {
   FileCheck2, 
   LayoutGrid, 
   Smartphone, 
-  UserPlus 
+  UserPlus,
+  Database,
+  Sparkles
 } from 'lucide-react';
 
 // Center coordinates per Dapil in Kabupaten Ponorogo
@@ -213,6 +216,20 @@ export function DashboardView({
       if (systemSettingsList.length > 0) {
         setRawSystemSettings(systemSettingsList[0]);
       }
+
+      // Auto-populate fresh empty databases once
+      if (calegList.length === 0 && dptList.length === 0 && konstituenList.length === 0) {
+        if (!sessionStorage.getItem('auto_seed_attempted')) {
+          sessionStorage.setItem('auto_seed_attempted', 'true');
+          console.log('🌱 Database kosong terdeteksi. Menjalankan sinkronisasi awal data starter Ponorogo...');
+          seedCloudDatabase().then((res) => {
+            setSeedMessage({ type: 'success', text: res.message });
+            fetchLiveDatabaseMetrics();
+          }).catch((e) => {
+            console.warn('Auto-seed initial database error:', e);
+          });
+        }
+      }
     } catch (err) {
       console.warn('Gagal memuat data realtime dari Cloud Firestore:', err);
     } finally {
@@ -372,6 +389,33 @@ export function DashboardView({
         }`}>
           <span>{seedMessage.text}</span>
           <button onClick={() => setSeedMessage(null)} className="underline text-[11px] cursor-pointer">Tutup</button>
+        </div>
+      )}
+
+      {/* Empty Database Fresh Setup Banner */}
+      {!loading && rawKonstituen.length === 0 && rawDpt.length === 0 && !calegInfo && (
+        <div className="p-4 rounded-2xl bg-amber-500/10 border-2 border-amber-500/30 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
+              <Database className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-slate-900 dark:text-amber-100">
+                Basis Data Baru Terdeteksi: <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-amber-500/20">{activeFirebaseConfig.projectId}</span>
+              </h4>
+              <p className="text-xs text-slate-600 dark:text-amber-300/80">
+                Koleksi Firestore saat ini masih kosong. Klik tombol untuk menginjeksi 16 dataset resmi pemilu Ponorogo (DPT, Relawan, Suara C1, Caleg).
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleSeedDatabase}
+            disabled={seedingCloud}
+            className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl transition-all shrink-0 cursor-pointer shadow-sm flex items-center justify-center gap-1.5"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>{seedingCloud ? 'Menyuntikkan Data...' : 'Suntik Data Master Ponorogo'}</span>
+          </button>
         </div>
       )}
 

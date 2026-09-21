@@ -34,21 +34,57 @@ const getViteEnv = (key: string): string => {
   return '';
 };
 
+// Known fallback credentials for sysleg-5d4b8 (User's primary project)
+const SYSLEG_CREDENTIALS = {
+  apiKey: "AIzaSyBJXbPVzoXuxhMJSh5TUB3tIugNfFaq_Ww",
+  authDomain: "sysleg-5d4b8.firebaseapp.com",
+  projectId: "sysleg-5d4b8",
+  storageBucket: "sysleg-5d4b8.firebasestorage.app",
+  messagingSenderId: "434818810753",
+  appId: "1:434818810753:web:9e235fc848591d91be5e80",
+  firestoreDatabaseId: '(default)'
+};
+
+// Cleanly sanitize and validate database ID:
+// If user accidentally passed an Analytics Measurement ID (e.g. G-H6K4KHDS28) or default alias, fallback to '(default)'
+const sanitizeDatabaseId = (rawId?: string): string => {
+  if (!rawId) return '(default)';
+  const trimmed = rawId.trim();
+  if (trimmed === '' || trimmed === '(default)' || trimmed.startsWith('G-') || trimmed.startsWith('g-')) {
+    return '(default)';
+  }
+  return trimmed;
+};
+
 // Attempt to read from environment variables first (Production / Cloudflare Pages / Vercel)
 const envProjectId = getViteEnv('VITE_FIREBASE_PROJECT_ID');
 const isEnvConfigured = Boolean(envProjectId);
 
-// Prioritize environment variables, fallback to firebase-applet-config.json
-const resolvedFirebaseConfig = {
-  apiKey: isEnvConfigured ? (getViteEnv('VITE_FIREBASE_API_KEY') || firebaseAppletConfig.apiKey) : firebaseAppletConfig.apiKey,
-  authDomain: isEnvConfigured ? (getViteEnv('VITE_FIREBASE_AUTH_DOMAIN') || `${envProjectId}.firebaseapp.com`) : firebaseAppletConfig.authDomain,
-  projectId: isEnvConfigured ? envProjectId : firebaseAppletConfig.projectId,
-  storageBucket: isEnvConfigured ? (getViteEnv('VITE_FIREBASE_STORAGE_BUCKET') || `${envProjectId}.firebasestorage.app`) : firebaseAppletConfig.storageBucket,
-  messagingSenderId: isEnvConfigured ? (getViteEnv('VITE_FIREBASE_MESSAGING_SENDER_ID') || firebaseAppletConfig.messagingSenderId) : firebaseAppletConfig.messagingSenderId,
-  appId: isEnvConfigured ? (getViteEnv('VITE_FIREBASE_APP_ID') || firebaseAppletConfig.appId) : firebaseAppletConfig.appId,
-  firestoreDatabaseId: isEnvConfigured ? (getViteEnv('VITE_FIREBASE_DATABASE_ID') || firebaseAppletConfig.firestoreDatabaseId || '(default)') : (firebaseAppletConfig.firestoreDatabaseId || '(default)')
+const rawEnvDbId = getViteEnv('VITE_FIREBASE_DATABASE_ID');
+const effectiveDbId = sanitizeDatabaseId(rawEnvDbId);
+
+// Prioritize environment variables, fallback cleanly to default project config
+const resolvedFirebaseConfig = isEnvConfigured ? {
+  apiKey: getViteEnv('VITE_FIREBASE_API_KEY') || (envProjectId === 'sysleg-5d4b8' ? SYSLEG_CREDENTIALS.apiKey : firebaseAppletConfig.apiKey),
+  authDomain: getViteEnv('VITE_FIREBASE_AUTH_DOMAIN') || `${envProjectId}.firebaseapp.com`,
+  projectId: envProjectId,
+  storageBucket: getViteEnv('VITE_FIREBASE_STORAGE_BUCKET') || (envProjectId === 'sysleg-5d4b8' ? SYSLEG_CREDENTIALS.storageBucket : `${envProjectId}.firebasestorage.app`),
+  messagingSenderId: getViteEnv('VITE_FIREBASE_MESSAGING_SENDER_ID') || (envProjectId === 'sysleg-5d4b8' ? SYSLEG_CREDENTIALS.messagingSenderId : firebaseAppletConfig.messagingSenderId),
+  appId: getViteEnv('VITE_FIREBASE_APP_ID') || (envProjectId === 'sysleg-5d4b8' ? SYSLEG_CREDENTIALS.appId : firebaseAppletConfig.appId),
+  firestoreDatabaseId: effectiveDbId !== '(default)' ? effectiveDbId : (envProjectId === firebaseAppletConfig.projectId ? (firebaseAppletConfig.firestoreDatabaseId || '(default)') : '(default)'),
+  measurementId: rawEnvDbId.startsWith('G-') ? rawEnvDbId : getViteEnv('VITE_FIREBASE_MEASUREMENT_ID')
+} : {
+  apiKey: firebaseAppletConfig.apiKey,
+  authDomain: firebaseAppletConfig.authDomain,
+  projectId: firebaseAppletConfig.projectId,
+  storageBucket: firebaseAppletConfig.storageBucket,
+  messagingSenderId: firebaseAppletConfig.messagingSenderId,
+  appId: firebaseAppletConfig.appId,
+  firestoreDatabaseId: sanitizeDatabaseId(firebaseAppletConfig.firestoreDatabaseId),
+  measurementId: (firebaseAppletConfig as any).measurementId || ''
 };
 
+export const activeFirebaseConfig = resolvedFirebaseConfig;
 export const isConfigured = Boolean(resolvedFirebaseConfig.projectId);
 
 if (!isConfigured) {
@@ -65,14 +101,18 @@ const app = getApps().length > 0 ? getApp() : initializeApp(resolvedFirebaseConf
 // Initialize Firestore with Persistent IndexedDB Local Cache (Zero-Read Repeat Optimization)
 let firestoreDb: ReturnType<typeof getFirestore>;
 try {
-  const dbId = resolvedFirebaseConfig.firestoreDatabaseId === '(default)' ? undefined : resolvedFirebaseConfig.firestoreDatabaseId;
+  const dbId = (!resolvedFirebaseConfig.firestoreDatabaseId || resolvedFirebaseConfig.firestoreDatabaseId === '(default)' || resolvedFirebaseConfig.firestoreDatabaseId.startsWith('G-')) 
+    ? undefined 
+    : resolvedFirebaseConfig.firestoreDatabaseId;
   firestoreDb = initializeFirestore(app, {
     localCache: persistentLocalCache({
       tabManager: persistentMultipleTabManager()
     })
   }, dbId);
 } catch {
-  const dbId = resolvedFirebaseConfig.firestoreDatabaseId === '(default)' ? undefined : resolvedFirebaseConfig.firestoreDatabaseId;
+  const dbId = (!resolvedFirebaseConfig.firestoreDatabaseId || resolvedFirebaseConfig.firestoreDatabaseId === '(default)' || resolvedFirebaseConfig.firestoreDatabaseId.startsWith('G-')) 
+    ? undefined 
+    : resolvedFirebaseConfig.firestoreDatabaseId;
   firestoreDb = getFirestore(app, dbId);
 }
 
@@ -261,15 +301,16 @@ export class FirebaseDataService {
 
     try {
       const colRef = collection(db, collectionName);
-      let q = query(colRef);
+      let snapshot;
 
+      // Attempt ordered fetch; gracefully fallback to unordered collection fetch if index is missing
       try {
-        q = query(colRef, orderBy('createdAt', 'desc'));
-      } catch (orderErr) {
-        console.warn(`Collection ${collectionName} does not have createdAt index yet:`, orderErr);
+        const q = query(colRef, orderBy('createdAt', 'desc'));
+        snapshot = await getDocs(q);
+      } catch {
+        snapshot = await getDocs(colRef);
       }
 
-      const snapshot = await getDocs(q);
       const items: any[] = [];
 
       snapshot.forEach(docSnap => {
@@ -294,6 +335,14 @@ export class FirebaseDataService {
           id: docSnap.id,
           ...data
         });
+      });
+
+      // Consistent in-memory sorting by createdAt if available
+      items.sort((a, b) => {
+        if (!a.createdAt && !b.createdAt) return 0;
+        if (!a.createdAt) return 1;
+        if (!b.createdAt) return -1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
 
       let finalItems = items;
