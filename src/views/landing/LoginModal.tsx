@@ -3,11 +3,7 @@ import {
   Shield, 
   ArrowRight, 
   AlertCircle, 
-  Loader2, 
-  Award, 
-  UserCheck, 
-  MapPin, 
-  Users 
+  Loader2
 } from 'lucide-react';
 
 interface LoginModalProps {
@@ -18,7 +14,7 @@ interface LoginModalProps {
   loading: boolean;
   error: string;
   onLogin: (e: React.FormEvent) => void;
-  onQuickDemoLogin: (role: string, demoEmail: string) => void;
+  onQuickDemoLogin?: (role: string, demoEmail: string) => void;
   onBackToLanding: () => void;
 }
 
@@ -30,7 +26,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   loading,
   error,
   onLogin,
-  onQuickDemoLogin,
   onBackToLanding
 }) => {
   return (
@@ -92,58 +87,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               {!loading && <ArrowRight className="w-4 h-4" />}
             </button>
           </form>
-
-          {/* Quick Demo Simulator Login Buttons */}
-          <div className="mt-6 pt-5 border-t border-slate-100">
-            <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2.5">
-              Simulasi Login Instan (Pilih Peran):
-            </span>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => onQuickDemoLogin('CALEG_UTAMA', 'caleg@domain.com')}
-                className="px-3 py-2 text-left rounded-xl border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50/50 transition-all cursor-pointer"
-              >
-                <div className="text-[11px] font-bold text-slate-900 flex items-center gap-1.5">
-                  <Award className="w-3 h-3 text-amber-500" /> Caleg Utama
-                </div>
-                <div className="text-[9px] text-slate-400 truncate">Kandidat & War Room</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onQuickDemoLogin('TIM_SES', 'timses@domain.com')}
-                className="px-3 py-2 text-left rounded-xl border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50/50 transition-all cursor-pointer"
-              >
-                <div className="text-[11px] font-bold text-slate-900 flex items-center gap-1.5">
-                  <UserCheck className="w-3 h-3 text-purple-500" /> Tim Ses Utama
-                </div>
-                <div className="text-[9px] text-slate-400 truncate">Sekretariat & Pendaftaran</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onQuickDemoLogin('KORCAM', 'korcam@domain.com')}
-                className="px-3 py-2 text-left rounded-xl border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50/50 transition-all cursor-pointer"
-              >
-                <div className="text-[11px] font-bold text-slate-900 flex items-center gap-1.5">
-                  <MapPin className="w-3 h-3 text-emerald-500" /> Korcam
-                </div>
-                <div className="text-[9px] text-slate-400 truncate">Koordinator Kecamatan</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onQuickDemoLogin('RELAWAN_LAPANGAN', 'relawan@domain.com')}
-                className="px-3 py-2 text-left rounded-xl border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50/50 transition-all cursor-pointer"
-              >
-                <div className="text-[11px] font-bold text-slate-900 flex items-center gap-1.5">
-                  <Users className="w-3 h-3 text-sky-500" /> Relawan Lapangan
-                </div>
-                <div className="text-[9px] text-slate-400 truncate">Input KTP & C1 TPS</div>
-              </button>
-            </div>
-          </div>
 
           <div className="mt-6 text-center">
             <button 

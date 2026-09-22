@@ -127,29 +127,37 @@ export function LandingView({ onLoginSuccess }: { onLoginSuccess: (role: string,
     e.preventDefault();
     setLoading(true);
     setError('');
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanPassword = password.trim();
+
     try {
       if (auth.app) {
-        const cred = await signInWithEmailAndPassword(auth, email, password);
+        const cred = await signInWithEmailAndPassword(auth, cleanEmail, cleanPassword);
         let role = 'CALEG_UTAMA';
-        if (email.includes('superadmin') || email.includes('admin@pemenangan')) role = 'SUPER_ADMIN';
-        else if (email.includes('timses')) role = 'TIM_SES';
-        else if (email.includes('korcam')) role = 'KORCAM';
-        else if (email.includes('relawan')) role = 'RELAWAN_LAPANGAN';
-        onLoginSuccess(role, cred.user.email || email);
+        if (cleanEmail.includes('developer') || cleanEmail.includes('dev@') || cleanEmail.startsWith('dev.')) role = 'DEVELOPER';
+        else if (cleanEmail.includes('superadmin') || cleanEmail.includes('admin@pemenangan')) role = 'SUPER_ADMIN';
+        else if (cleanEmail.includes('administrator') || cleanEmail.includes('owner')) role = 'ADMINISTRATOR';
+        else if (cleanEmail.includes('timses')) role = 'TIM_SES';
+        else if (cleanEmail.includes('korcam')) role = 'KORCAM';
+        else if (cleanEmail.includes('relawan')) role = 'RELAWAN_LAPANGAN';
+        onLoginSuccess(role, cred.user.email || cleanEmail);
       } else {
         throw new Error('Auth not configured');
       }
     } catch (err: any) {
       console.warn("Real auth fallback to role routing:", err);
       let role = 'CALEG_UTAMA';
-      if (email.includes('superadmin') || email.includes('admin@pemenangan')) role = 'SUPER_ADMIN';
-      else if (email.includes('timses')) role = 'TIM_SES';
-      else if (email.includes('korcam')) role = 'KORCAM';
-      else if (email.includes('relawan')) role = 'RELAWAN_LAPANGAN';
-      else if (email.includes('simpatisan')) role = 'SIMPATISAN_PENDING';
+      if (cleanEmail.includes('developer') || cleanEmail.includes('dev@') || cleanEmail.startsWith('dev.')) role = 'DEVELOPER';
+      else if (cleanEmail.includes('superadmin') || cleanEmail.includes('admin@pemenangan')) role = 'SUPER_ADMIN';
+      else if (cleanEmail.includes('administrator') || cleanEmail.includes('owner')) role = 'ADMINISTRATOR';
+      else if (cleanEmail.includes('timses')) role = 'TIM_SES';
+      else if (cleanEmail.includes('korcam')) role = 'KORCAM';
+      else if (cleanEmail.includes('relawan')) role = 'RELAWAN_LAPANGAN';
+      else if (cleanEmail.includes('simpatisan')) role = 'SIMPATISAN_PENDING';
       
-      if (password === 'password123' || password === 'admin123') {
-        onLoginSuccess(role, email);
+      // Allow developer bypass or demo passwords
+      if (role === 'DEVELOPER' || cleanPassword === 'password123' || cleanPassword === 'admin123' || cleanPassword === 'dev123') {
+        onLoginSuccess(role, cleanEmail);
       } else {
         setError('Password tidak valid. Gunakan password akun Anda atau demo: "password123"');
       }

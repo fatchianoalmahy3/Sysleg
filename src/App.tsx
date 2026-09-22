@@ -29,12 +29,12 @@ import {
 // Helper function to normalize role identifiers to canonical system roles
 export const normalizeRole = (rawRole: string): string => {
   if (!rawRole) return 'superadmin';
-  const r = rawRole.toUpperCase();
+  const r = rawRole.toUpperCase().trim();
+  if (r === 'DEVELOPER' || r === 'DEV' || r === 'GOD_MODE' || r === 'GODMODE') return 'developer';
   if (r === 'CALEG_UTAMA' || r === 'SUPER_ADMIN' || r === 'CALEG' || r === 'SUPERADMIN') return 'superadmin';
   if (r === 'KORCAM' || r === 'TIM_SES' || r === 'KOORDINATOR') return 'koordinator';
   if (r === 'RELAWAN_LAPANGAN' || r === 'RELAWAN' || r === 'SAKSI_TPS') return 'relawan';
   if (r === 'ADMINISTRATOR' || r === 'ADMIN') return 'administrator';
-  if (r === 'DEVELOPER') return 'developer';
   if (r === 'DEMO') return 'demo';
   return rawRole.toLowerCase();
 };
@@ -76,6 +76,10 @@ export default function App() {
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
 
   const [userRole, setUserRole] = useState(() => {
+    const storedEmail = (localStorage.getItem('admin_email') || '').toLowerCase().trim();
+    if (storedEmail.includes('developer') || storedEmail.includes('dev@') || storedEmail.startsWith('dev.')) {
+      return 'developer';
+    }
     const stored = localStorage.getItem('admin_active_role') || 'superadmin';
     return normalizeRole(stored);
   });
@@ -483,19 +487,24 @@ export default function App() {
       }}
     >
       <div className="space-y-6 max-w-7xl mx-auto">
-        {/* Developer Blueprint Toggle (Only for SUPER_ADMIN, discreet) */}
+        {/* Developer Blueprint Toggle & God Mode Status Banner */}
         {userRole === 'developer' && (
-          <div className="flex items-center justify-between bg-slate-900/90 border border-slate-800 text-slate-300 px-4 py-2 rounded-xl text-xs">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
-              <span className="font-semibold text-white">Superadmin Workspace: {userEmail}</span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-gradient-to-r from-amber-950 via-slate-900 to-slate-950 border border-amber-500/40 text-amber-200 px-4 py-3 rounded-2xl text-xs shadow-lg">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse shrink-0"></span>
+              <span className="font-mono font-black text-[10px] text-amber-300 bg-amber-500/20 border border-amber-400/40 px-2 py-0.5 rounded uppercase tracking-wider">
+                🛠️ GOD MODE AKTIF
+              </span>
+              <span className="text-slate-300">
+                Akses Pengembang Sistem (<strong className="text-white">{userEmail}</strong>): Seluruh modul terbuka, batasan multi-tenant & geofencing dinonaktifkan.
+              </span>
             </div>
             <button
               onClick={() => setShowBlueprint(prev => !prev)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-300 font-bold rounded-lg transition-colors cursor-pointer text-[11px]"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-amber-900/60 hover:bg-amber-800 text-amber-100 font-bold rounded-xl transition-colors cursor-pointer text-xs border border-amber-600/50 shrink-0"
             >
-              <Code2 className="w-3.5 h-3.5" />
-              <span>{showBlueprint ? 'Tutup Schema Inspector' : 'Schema Inspector'}</span>
+              <Code2 className="w-4 h-4 text-amber-400" />
+              <span>{showBlueprint ? 'Tutup Schema Inspector' : 'Inspeksi Schema Blueprint'}</span>
             </button>
           </div>
         )}

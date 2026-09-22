@@ -1,8 +1,9 @@
-import React, { useEffect } from 'react';
-import { Map, X, MessageCircle } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { Map, X, MessageCircle, Layers } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import { PONOROGO_GEOJSON } from '../../data/ponorogoGeoJson';
 
 // Fix Leaflet's default marker icons in Vite/React
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -78,6 +79,23 @@ export function DashboardTerritorialMap({
   setSelectedVillage,
   tpsStats
 }: DashboardTerritorialMapProps) {
+  const [showDistrictBorders, setShowDistrictBorders] = useState<boolean>(true);
+
+  // Filter district GeoJSON for active dapil
+  const districtGeoData = useMemo(() => {
+    if (!currentDapilConfig.districts || currentDapilConfig.districts.length === 0) {
+      return PONOROGO_GEOJSON;
+    }
+    const filtered = PONOROGO_GEOJSON.features.filter(f => {
+      const dName = (f.properties?.name || '').toLowerCase();
+      return currentDapilConfig.districts.some(d => dName.includes(d.toLowerCase()));
+    });
+    return {
+      type: 'FeatureCollection' as const,
+      features: filtered.length > 0 ? filtered : PONOROGO_GEOJSON.features
+    };
+  }, [currentDapilConfig.districts]);
+
   return (
     <div className="bg-white p-5 rounded-2xl shadow-xs border border-slate-200 space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-100">
@@ -93,6 +111,20 @@ export function DashboardTerritorialMap({
 
         {/* Map Layer Controls */}
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Toggle Poligon Batas Kecamatan */}
+          <button
+            onClick={() => setShowDistrictBorders(!showDistrictBorders)}
+            className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              showDistrictBorders
+                ? 'bg-slate-900 border-slate-800 text-white shadow-xs'
+                : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900'
+            }`}
+            title="Tampilkan / Sembunyikan garis batas administrasi kecamatan"
+          >
+            <span className={`w-2 h-2 rounded-full ${showDistrictBorders ? 'bg-indigo-400' : 'bg-slate-300'}`}></span>
+            <span>Batas Kecamatan ({districtGeoData?.features?.length || 0})</span>
+          </button>
+
           {/* Toggle Poligon Batas Desa */}
           <button
             onClick={() => setShowVillagePolygons(!showVillagePolygons)}
@@ -177,7 +209,23 @@ export function DashboardTerritorialMap({
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
-          {/* Dynamic GeoJSON Boundaries */}
+          {/* Kecamatan Outer Boundaries (Solid, Crisp Frame) */}
+          {showDistrictBorders && districtGeoData && (
+            <GeoJSON
+              key={`district-geo-${currentDapilConfig.name}-${districtGeoData.features?.length || 0}`}
+              data={districtGeoData as any}
+              style={{
+                fillColor: '#334155',
+                fillOpacity: 0.04,
+                color: '#1e293b',
+                weight: 2,
+                opacity: 0.85
+              }}
+              interactive={false}
+            />
+          )}
+
+          {/* Dynamic Village GeoJSON Boundaries (Smooth, Solid, No Moire Jitter) */}
           {showVillagePolygons && villageGeoData && (
             <GeoJSON
               key={`geo-${currentDapilConfig.name}-${villageGeoData.features?.length || 0}`}
@@ -185,11 +233,11 @@ export function DashboardTerritorialMap({
               style={(feature: any) => {
                 const isSelected = selectedVillage === feature?.properties?.name;
                 return {
-                  fillColor: isSelected ? '#6366f1' : '#cbd5e1',
-                  fillOpacity: isSelected ? 0.45 : 0.2,
-                  color: isSelected ? '#4338ca' : '#64748b',
+                  fillColor: isSelected ? '#4f46e5' : '#818cf8',
+                  fillOpacity: isSelected ? 0.42 : 0.20,
+                  color: isSelected ? '#312e81' : '#6366f1',
                   weight: isSelected ? 2.5 : 1,
-                  dashArray: isSelected ? '' : '2, 3'
+                  opacity: isSelected ? 1 : 0.75
                 };
               }}
               onEachFeature={(feature: any, layer: any) => {
@@ -199,9 +247,26 @@ export function DashboardTerritorialMap({
                     if (desaName) {
                       setSelectedVillage(desaName);
                     }
+                  },
+                  mouseover: (e: any) => {
+                    const l = e.target;
+                    l.setStyle({
+                      fillOpacity: 0.45,
+                      weight: 2,
+                      color: '#312e81'
+                    });
+                  },
+                  mouseout: (e: any) => {
+                    const l = e.target;
+                    const isSelected = selectedVillage === desaName;
+                    l.setStyle({
+                      fillOpacity: isSelected ? 0.42 : 0.20,
+                      weight: isSelected ? 2.5 : 1,
+                      color: isSelected ? '#312e81' : '#6366f1'
+                    });
                   }
                 });
-                layer.bindTooltip(`<strong>${desaName}</strong>`, { sticky: true, className: 'text-xs' });
+                layer.bindTooltip(`<strong>${desaName}</strong>`, { sticky: true, className: 'text-xs font-sans' });
               }}
             />
           )}
